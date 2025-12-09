@@ -12,6 +12,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type AuthType string
+
+const (
+	AuthTypeLDAP  AuthType = "ldap"
+	AuthTypeLocal AuthType = "local"
+)
+
+const (
+	LDAP_LOGIN_URL  = "/v3-public/openLdapProviders/openldap?action=login"
+	LOCAL_LOGIN_URL = "/v3-public/localProviders/local?action=login"
+)
+
 var (
 	insecure = false
 	tr       *http.Transport
@@ -37,8 +49,8 @@ func init() {
 	}
 }
 
-func NewClient(baseurl, username, password string, logger *zap.Logger) (*Client, error) {
-	token, err := getRancherToken(baseurl, username, password)
+func NewClient(baseurl, username, password string, authType AuthType, logger *zap.Logger) (*Client, error) {
+	token, err := getRancherToken(baseurl, username, password, authType)
 	if err != nil {
 		return nil, err
 	}
@@ -123,8 +135,8 @@ func (c *Client) GetClusterToken(clusterId string) string {
 	return kubeconfig.Users[0].User.Token
 }
 
-// POST /v3-public/openLdapProviders/openldap?action=login
-func getRancherToken(baseurl, username, password string) (string, error) {
+// POST /v3-public/openLdapProviders/openldap?action=login or /v3-public/localProviders/local?action=login
+func getRancherToken(baseurl, username, password string, authType AuthType) (string, error) {
 	type loginResponse struct {
 		Token string `json:"token"`
 	}
@@ -142,7 +154,18 @@ func getRancherToken(baseurl, username, password string) (string, error) {
 		return "", fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/v3-public/openLdapProviders/openldap?action=login", baseurl)
+	// Select login URL based on auth type
+	var loginURL string
+	switch authType {
+	case AuthTypeLDAP:
+		loginURL = LDAP_LOGIN_URL
+	case AuthTypeLocal:
+		loginURL = LOCAL_LOGIN_URL
+	default:
+		return "", fmt.Errorf("invalid auth type: %s", authType)
+	}
+
+	url := fmt.Sprintf("%s%s", baseurl, loginURL)
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {

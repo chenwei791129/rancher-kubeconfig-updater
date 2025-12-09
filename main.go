@@ -17,6 +17,7 @@ func main() {
 	// Parse command line flags
 	autoCreate := flag.Bool("auto-create", false, "Automatically create kubeconfig entries for clusters not found in the config")
 	flag.BoolVar(autoCreate, "a", false, "Automatically create kubeconfig entries for clusters not found in the config (shorthand)")
+	authTypeFlag := flag.String("auth-type", "", "Authentication type: 'local' or 'ldap' (default: from RANCHER_AUTH_TYPE env or 'local')")
 	flag.Parse()
 
 	// Initialize logger with custom config
@@ -35,6 +36,7 @@ func main() {
 	rancherURL := os.Getenv("RANCHER_URL")
 	rancherUsername := os.Getenv("RANCHER_USERNAME")
 	rancherPassword := os.Getenv("RANCHER_PASSWORD")
+	rancherAuthType := os.Getenv("RANCHER_AUTH_TYPE") // "ldap" or "local", defaults to "ldap" if not set
 
 	kubeconfigPath := "~/.kube/config"
 	config, err := kubeconfig.LoadKubeconfig(kubeconfigPath)
@@ -48,7 +50,28 @@ func main() {
 		logger.Info("Creating new kubeconfig file at ~/.kube/config")
 	}
 
-	client, err := rancher.NewClient(rancherURL, rancherUsername, rancherPassword, logger)
+	// Determine auth type (priority: flag > env var > default)
+	authType := rancher.AuthTypeLocal
+
+	// First, check environment variable
+	if rancherAuthType == "ldap" {
+		authType = rancher.AuthTypeLDAP
+	}
+
+	// Command line flag takes precedence over environment variable
+	switch *authTypeFlag {
+	case "":
+		// No flag provided, stick with env var or default
+	case "ldap":
+		authType = rancher.AuthTypeLDAP
+	case "local":
+		authType = rancher.AuthTypeLocal
+	default:
+		logger.Error("Invalid auth-type flag value. Must be 'local' or 'ldap'")
+		return
+	}
+
+	client, err := rancher.NewClient(rancherURL, rancherUsername, rancherPassword, authType, logger)
 	if err != nil {
 		logger.Error("Failed to authenticate with Rancher", zap.Error(err))
 		return

@@ -24,6 +24,7 @@ Set environment variables:
 export RANCHER_URL=https://rancher.example.com
 export RANCHER_USERNAME=your-username
 export RANCHER_PASSWORD=your-password
+export RANCHER_AUTH_TYPE=local  # Optional: "local" or "ldap" (default: local)
 ```
 
 Or use a `.env` file:
@@ -31,6 +32,19 @@ Or use a `.env` file:
 ```bash
 cp .env.example .env
 # Edit .env with your credentials
+```
+
+### Authentication Types
+
+The tool supports two authentication methods:
+
+- **local** (default) - Use Rancher local authentication
+- **ldap** - Use LDAP authentication
+
+To use LDAP authentication, set:
+
+```bash
+export RANCHER_AUTH_TYPE=ldap
 ```
 
 ## Usage
@@ -47,9 +61,22 @@ Auto-create entries for new clusters:
 ./rancher-kubeconfig-updater -a
 ```
 
+Use LDAP authentication:
+
+```bash
+./rancher-kubeconfig-updater --auth-type ldap
+```
+
+Combine options:
+
+```bash
+./rancher-kubeconfig-updater -a --auth-type ldap
+```
+
 ## Options
 
 - `-a`, `--auto-create` - Create kubeconfig entries for new clusters
+- `--auth-type` - Authentication type: `local` or `ldap` (overrides `RANCHER_AUTH_TYPE` environment variable)
 
 ## License
 
