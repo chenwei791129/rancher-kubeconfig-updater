@@ -59,6 +59,8 @@ Auto-create entries for new clusters:
 
 ```bash
 ./rancher-kubeconfig-updater -a
+# or
+./rancher-kubeconfig-updater --auto-create
 ```
 
 Use LDAP authentication:
@@ -73,10 +75,24 @@ Combine options:
 ./rancher-kubeconfig-updater -a --auth-type ldap
 ```
 
-## Options
+Show help:
 
-- `-a`, `--auto-create` - Create kubeconfig entries for new clusters
-- `--auth-type` - Authentication type: `local` or `ldap` (overrides `RANCHER_AUTH_TYPE` environment variable)
+```bash
+./rancher-kubeconfig-updater -h
+# or
+./rancher-kubeconfig-updater --help
+```
+
+## Flags
+
+```
+Flags:
+      --auth-type string   Authentication type: 'local' or 'ldap' (default: from RANCHER_AUTH_TYPE env or 'local')
+  -a, --auto-create        Automatically create kubeconfig entries for clusters not found in the config
+  -h, --help               help for rancher-kubeconfig-updater
+```
+
+**Note**: Command line flags take precedence over environment variables.
 
 ## License
 

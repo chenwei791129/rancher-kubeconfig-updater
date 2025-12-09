@@ -1,24 +1,38 @@
 package main
 
 import (
-	"flag"
 	"os"
 	"rancher-kubeconfig-updater/internal/kubeconfig"
 	"rancher-kubeconfig-updater/internal/rancher"
 
 	_ "github.com/joho/godotenv/autoload"
+	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-func main() {
-	var err error
+var (
+	autoCreate   bool
+	authTypeFlag string
+)
 
-	// Parse command line flags
-	autoCreate := flag.Bool("auto-create", false, "Automatically create kubeconfig entries for clusters not found in the config")
-	flag.BoolVar(autoCreate, "a", false, "Automatically create kubeconfig entries for clusters not found in the config (shorthand)")
-	authTypeFlag := flag.String("auth-type", "", "Authentication type: 'local' or 'ldap' (default: from RANCHER_AUTH_TYPE env or 'local')")
-	flag.Parse()
+func main() {
+	rootCmd := &cobra.Command{
+		Use:   "rancher-kubeconfig-updater",
+		Short: "Update kubeconfig tokens for Rancher-managed Kubernetes clusters",
+		Run:   run,
+	}
+
+	rootCmd.Flags().BoolVarP(&autoCreate, "auto-create", "a", false, "Automatically create kubeconfig entries for clusters not found in the config")
+	rootCmd.Flags().StringVar(&authTypeFlag, "auth-type", "", "Authentication type: 'local' or 'ldap' (default: from RANCHER_AUTH_TYPE env or 'local')")
+
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func run(cmd *cobra.Command, args []string) {
+	var err error
 
 	// Initialize logger with custom config
 	logConfig := zap.NewProductionConfig()
@@ -59,7 +73,7 @@ func main() {
 	}
 
 	// Command line flag takes precedence over environment variable
-	switch *authTypeFlag {
+	switch authTypeFlag {
 	case "":
 		// No flag provided, stick with env var or default
 	case "ldap":
@@ -85,7 +99,7 @@ func main() {
 
 	for _, v := range clusters {
 		clusterToken := client.GetClusterToken(v.ID)
-		err = config.UpdateTokenByName(v.ID, v.Name, clusterToken, rancherURL, *autoCreate, logger)
+		err = config.UpdateTokenByName(v.ID, v.Name, clusterToken, rancherURL, autoCreate, logger)
 		if err != nil {
 			// Error is already logged in UpdateTokenByName
 			continue
