@@ -1,0 +1,38 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"syscall"
+
+	"github.com/spf13/cobra"
+	"golang.org/x/term"
+)
+
+// GetConfig returns the value of a flag if it was set, otherwise returns the value of the environment variable.
+func GetConfig(cmd *cobra.Command, flagName, envKey string) string {
+	if cmd.Flags().Changed(flagName) {
+		val, _ := cmd.Flags().GetString(flagName)
+		return val
+	}
+	return os.Getenv(envKey)
+}
+
+// GetPassword returns the password from the flag or environment variable.
+// If the flag is set to "-", it prompts the user for the password securely.
+func GetPassword(cmd *cobra.Command, flagName, envKey string) (string, error) {
+	if cmd.Flags().Changed(flagName) {
+		val, _ := cmd.Flags().GetString(flagName)
+		if val == "-" {
+			fmt.Print("Enter Rancher Password: ")
+			bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+			fmt.Println() // Newline after input
+			if err != nil {
+				return "", err
+			}
+			return string(bytePassword), nil
+		}
+		return val, nil
+	}
+	return os.Getenv(envKey), nil
+}
