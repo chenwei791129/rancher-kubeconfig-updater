@@ -1,0 +1,71 @@
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+name: release-please
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          # 使用 PAT token（因為 main 分支有保護規則）
+          token: ${{ secrets.MY_RELEASE_PLEASE_TOKEN }}
+          release-type: go
+
+  build-and-upload:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            output: rancher-kubeconfig-updater-linux-amd64
+          # - goos: linux
+          #   goarch: arm64
+          #   output: rancher-kubeconfig-updater-linux-arm64
+          # - goos: darwin
+          #   goarch: amd64
+          #   output: rancher-kubeconfig-updater-darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            output: rancher-kubeconfig-updater-darwin-arm64
+          - goos: windows
+            goarch: amd64
+            output: rancher-kubeconfig-updater-windows-amd64.exe
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go build -ldflags="-s -w -X main.version=${{ needs.release-please.outputs.tag_name }}" -o ${{ matrix.output }} .
+
+      - name: Upload Release Asset
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ needs.release-please.outputs.tag_name }} ${{ matrix.output }} --clobber
