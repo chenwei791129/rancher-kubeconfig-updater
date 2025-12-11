@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.0.0...v1.1.0) (2025-12-11)
+
+
+### Features
+
+* add CLI flags for Rancher credentials ([a4ae20e](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/a4ae20e85464bc4a0616861d255c3b788c2ac13e))
+* add CLI flags for Rancher credentials ([e70daad](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/e70daadec00ef798dab0eee7c4689520281d585a))
+
 ## 1.0.0 (2025-12-10)
 
 
