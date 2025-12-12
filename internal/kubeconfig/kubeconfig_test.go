@@ -9,7 +9,10 @@ import (
 
 // TestExpandPath tests the expandPath function with various path formats
 func TestExpandPath(t *testing.T) {
-	userHomeDir, _ := os.UserHomeDir()
+	userHomeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("os.UserHomeDir() error = %v", err)
+	}
 	pathSeparator := string(os.PathSeparator)
 	defaultPath, err := GetDefaultKubeconfigPath()
 	if err != nil {
