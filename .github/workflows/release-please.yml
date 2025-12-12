@@ -34,12 +34,6 @@ jobs:
           - goos: linux
             goarch: amd64
             output: rancher-kubeconfig-updater-linux-amd64
-          # - goos: linux
-          #   goarch: arm64
-          #   output: rancher-kubeconfig-updater-linux-arm64
-          # - goos: darwin
-          #   goarch: amd64
-          #   output: rancher-kubeconfig-updater-darwin-amd64
           - goos: darwin
             goarch: arm64
             output: rancher-kubeconfig-updater-darwin-arm64
