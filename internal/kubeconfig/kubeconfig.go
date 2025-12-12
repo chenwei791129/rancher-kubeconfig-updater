@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -123,9 +124,9 @@ func (c *Kubeconfig) SaveKubeconfig(path string) error {
 		return fmt.Errorf("failed to expand path: %w", err)
 	}
 
-	// 2. Ensure directory exists
+	// 2. Ensure directory exists with platform-appropriate permissions
 	dir := filepath.Dir(expandedPath)
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, getSecureDirMode()); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
@@ -140,23 +141,76 @@ func (c *Kubeconfig) SaveKubeconfig(path string) error {
 		return fmt.Errorf("failed to create backup: %w", err)
 	}
 
-	// 5. Atomic write
-	if err := atomicWriteFile(expandedPath, data, 0600); err != nil {
+	// 5. Atomic write with platform-appropriate permissions
+	if err := atomicWriteFile(expandedPath, data, getSecureFileMode()); err != nil {
 		return fmt.Errorf("failed to write kubeconfig file: %w", err)
 	}
 
 	return nil
 }
 
+// getSecureFileMode returns the appropriate file mode for secure kubeconfig files
+// Windows ignores Unix permissions, so we use default values there
+func getSecureFileMode() os.FileMode {
+	if runtime.GOOS == "windows" {
+		// Windows will ignore Unix permissions, use default value
+		return 0666
+	}
+	return 0600 // Unix: owner read/write only
+}
+
+// getSecureDirMode returns the appropriate directory mode for secure kubeconfig directories
+func getSecureDirMode() os.FileMode {
+	if runtime.GOOS == "windows" {
+		return 0777
+	}
+	return 0700 // Unix: owner read/write/execute only
+}
+
+// GetDefaultKubeconfigPath returns the default kubeconfig path for the current platform
+func GetDefaultKubeconfigPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(homeDir, ".kube", "config"), nil
+}
+
+// expandPath expands the given path, handling various path formats across platforms
 func expandPath(path string) (string, error) {
-	if strings.HasPrefix(path, "~/") {
+	// Handle empty path - use default
+	if path == "" {
+		return GetDefaultKubeconfigPath()
+	}
+
+	// Handle ~ prefix (Unix-style)
+	if strings.HasPrefix(path, "~") {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("failed to get user home dir: %w", err)
 		}
-		return filepath.Join(homeDir, path[2:]), nil
+
+		if path == "~" {
+			return homeDir, nil
+		}
+
+		var remainingPath string
+		// Remove ~/ or ~\ (support both separators)
+		if len(path) > 1 && (path[1] == '/' || path[1] == '\\') {
+			remainingPath = path[2:]
+		} else {
+			remainingPath = path[1:]
+		}
+
+		// Normalize path separators: replace backslashes with forward slashes,
+		// then convert to OS-specific separators
+		remainingPath = strings.ReplaceAll(remainingPath, "\\", "/")
+		remainingPath = filepath.FromSlash(remainingPath)
+		return filepath.Join(homeDir, remainingPath), nil
 	}
-	return path, nil
+
+	// Clean path (normalize separators)
+	return filepath.Clean(path), nil
 }
 
 // atomicWriteFile writes data to a file atomically by writing to a temp file first,
@@ -220,6 +274,6 @@ func createBackup(path string) error {
 	backupPath := fmt.Sprintf("%s.backup.%s", path,
 		time.Now().Format("20060102-150405.000000"))
 
-	// Write backup using atomic write
-	return atomicWriteFile(backupPath, data, 0600)
+	// Write backup using atomic write with platform-appropriate permissions
+	return atomicWriteFile(backupPath, data, getSecureFileMode())
 }
