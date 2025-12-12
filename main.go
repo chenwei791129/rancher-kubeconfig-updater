@@ -64,7 +64,9 @@ func run(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	kubeconfigPath := "~/.kube/config"
+	// Use empty string to let expandPath use the default platform-specific path
+	// This will automatically resolve to ~/.kube/config on Unix/macOS and %USERPROFILE%\.kube\config on Windows
+	kubeconfigPath := ""
 	kubecfg, err := kubeconfig.LoadKubeconfig(kubeconfigPath)
 	if err != nil {
 		logger.Error("Failed to load kubeconfig file", zap.Error(err))
@@ -73,7 +75,7 @@ func run(cmd *cobra.Command, args []string) {
 
 	// Check if this is a new config (no users means it's newly created)
 	if len(kubecfg.Users) == 0 && len(kubecfg.Clusters) == 0 && len(kubecfg.Contexts) == 0 {
-		logger.Info("Creating new kubeconfig file at ~/.kube/config")
+		logger.Info("Creating new kubeconfig file at default location")
 	}
 
 	// Determine auth type
