@@ -11,8 +11,10 @@ import (
 func TestExpandPath(t *testing.T) {
 	userHomeDir, _ := os.UserHomeDir()
 	pathSeparator := string(os.PathSeparator)
-	defaultPath, _ := GetDefaultKubeconfigPath()
-
+	defaultPath, err := GetDefaultKubeconfigPath()
+	if err != nil {
+		t.Fatalf("GetDefaultKubeconfigPath() error = %v", err)
+	}
 	tests := []struct {
 		name    string
 		input   string
