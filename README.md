@@ -1,5 +1,10 @@
 # Rancher Kubeconfig Updater
 
+![Visitors](https://api.visitorbadge.io/api/visitors?path=https%3A%2F%2Fgithub.com%2Fchenwei791129%2Francher-kubeconfig-updater&label=visitors&countColor=%230c7ebe&style=flat&labelStyle=none)
+![License](https://img.shields.io/github/license/chenwei791129/rancher-kubeconfig-updater)
+![GitHub Repo stars](https://img.shields.io/github/stars/chenwei791129/rancher-kubeconfig-updater)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/chenwei791129/rancher-kubeconfig-updater/go-test.yml?event=pull_request&label=pr-tests)
+
 A command-line tool to update kubeconfig tokens for Rancher-managed Kubernetes clusters.
 
 ## Features
