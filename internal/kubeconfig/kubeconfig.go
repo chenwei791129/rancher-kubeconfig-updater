@@ -206,7 +206,6 @@ func expandPath(path string) (string, error) {
 		// then convert to OS-specific separators
 		remainingPath = strings.ReplaceAll(remainingPath, "\\", "/")
 		remainingPath = filepath.FromSlash(remainingPath)
-		fmt.Println("remainingPath:", remainingPath)
 		return filepath.Join(homeDir, remainingPath), nil
 	}
 
