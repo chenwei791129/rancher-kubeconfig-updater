@@ -2,9 +2,9 @@ package main
 
 import (
 	"os"
+	"rancher-kubeconfig-updater/internal/config"
 	"rancher-kubeconfig-updater/internal/kubeconfig"
 	"rancher-kubeconfig-updater/internal/rancher"
-	"rancher-kubeconfig-updater/internal/config"
 
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/spf13/cobra"
