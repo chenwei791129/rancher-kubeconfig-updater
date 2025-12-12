@@ -87,9 +87,11 @@ Show help:
 
 ```
 Flags:
-      --auth-type string   Authentication type: 'local' or 'ldap' (default: from RANCHER_AUTH_TYPE env or 'local')
-  -a, --auto-create        Automatically create kubeconfig entries for clusters not found in the config
-  -h, --help               help for rancher-kubeconfig-updater
+      --auth-type string        Authentication type: 'local' or 'ldap' (default: from RANCHER_AUTH_TYPE env or 'local')
+  -a, --auto-create             Automatically create kubeconfig entries for clusters not found in the config
+  -h, --help                    help for rancher-kubeconfig-updater
+  -p, --password string[="-"]   Rancher Password
+  -u, --user string             Rancher Username
 ```
 
 **Note**: Command line flags take precedence over environment variables.
