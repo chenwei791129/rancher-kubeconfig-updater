@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.1.0...v1.2.0) (2025-12-12)
+
+
+### Features
+
+* add Windows cross-platform path support ([16946fb](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/16946fb409f675b008c93cfd4660670cefc0652f))
+
 ## [1.1.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.0.0...v1.1.0) (2025-12-11)
 
 
