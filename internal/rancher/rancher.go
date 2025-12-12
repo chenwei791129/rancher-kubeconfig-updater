@@ -12,6 +12,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// HTTPClient 介面用於抽象化 HTTP 呼叫，使其可測試
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 type AuthType string
 
 const (
@@ -30,10 +35,10 @@ var (
 )
 
 type Client struct {
-	token   string
-	client  *http.Client
-	BaseURL string
-	logger  *zap.Logger
+	token      string
+	httpClient HTTPClient
+	BaseURL    string
+	logger     *zap.Logger
 }
 
 type Cluster struct {
@@ -49,20 +54,39 @@ func init() {
 	}
 }
 
-func NewClient(baseurl, username, password string, authType AuthType, logger *zap.Logger) (*Client, error) {
-	token, err := getRancherToken(baseurl, username, password, authType)
+// ClientOption 用於配置 Client
+type ClientOption func(*Client)
+
+// WithHTTPClient 允許注入自定義的 HTTPClient（用於測試）
+func WithHTTPClient(client HTTPClient) ClientOption {
+	return func(c *Client) {
+		c.httpClient = client
+	}
+}
+
+func NewClient(baseurl, username, password string, authType AuthType, logger *zap.Logger, opts ...ClientOption) (*Client, error) {
+	// 預設使用標準 HTTP client
+	client := &Client{
+		httpClient: &http.Client{Transport: tr},
+		BaseURL:    baseurl,
+		logger:     logger,
+	}
+
+	// 套用選項（可注入 mock client）
+	for _, opt := range opts {
+		opt(client)
+	}
+
+	// 取得 token
+	token, err := getRancherToken(baseurl, username, password, authType, client.httpClient)
 	if err != nil {
 		return nil, err
 	}
 
+	client.token = token
 	logger.Debug("Successfully authenticated with Rancher API")
 
-	return &Client{
-		token:   token,
-		client:  &http.Client{Transport: tr},
-		BaseURL: baseurl,
-		logger:  logger,
-	}, nil
+	return client, nil
 }
 
 // GET /v3/clusters
@@ -76,7 +100,7 @@ func (c *Client) ListClusters() (Clusters, error) {
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Authorization", "Bearer "+c.token)
 
-	body, respCode, err := doRequest(c.client, req)
+	body, respCode, err := doRequest(c.httpClient, req)
 	if err != nil {
 		return clusters, err
 	}
@@ -115,7 +139,7 @@ func (c *Client) GetClusterToken(clusterId string) string {
 	req, _ := http.NewRequest("POST", url, nil)
 	req.Header.Set("Authorization", "Bearer "+c.token)
 
-	body, respCode, err := doRequest(c.client, req)
+	body, respCode, err := doRequest(c.httpClient, req)
 	if err != nil || respCode != http.StatusOK {
 		return ""
 	}
@@ -136,12 +160,10 @@ func (c *Client) GetClusterToken(clusterId string) string {
 }
 
 // POST /v3-public/openLdapProviders/openldap?action=login or /v3-public/localProviders/local?action=login
-func getRancherToken(baseurl, username, password string, authType AuthType) (string, error) {
+func getRancherToken(baseurl, username, password string, authType AuthType, httpClient HTTPClient) (string, error) {
 	type loginResponse struct {
 		Token string `json:"token"`
 	}
-
-	httpClient := &http.Client{Transport: tr}
 
 	// Prepare login request body
 	body := map[string]string{
@@ -195,7 +217,7 @@ func getRancherToken(baseurl, username, password string, authType AuthType) (str
 	return result.Token, nil
 }
 
-func doRequest(client *http.Client, req *http.Request) ([]byte, int, error) {
+func doRequest(client HTTPClient, req *http.Request) ([]byte, int, error) {
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to send request: %w", err)
