@@ -15,10 +15,43 @@ A command-line tool to update kubeconfig tokens for Rancher-managed Kubernetes c
 
 ## Installation
 
+### Linux / macOS
+
 ```bash
-git clone https://github.com/chenwei791129/rancher-kubeconfig-updater.git
-cd rancher-kubeconfig-updater
-go build
+# Detect OS and architecture
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+
+# Map architecture names
+case $ARCH in
+    x86_64) ARCH="amd64" ;;
+    aarch64) ARCH="arm64" ;;
+esac
+
+# Download the latest release
+curl -LO "https://github.com/chenwei791129/rancher-kubeconfig-updater/releases/latest/download/rancher-kubeconfig-updater-${OS}-${ARCH}"
+
+# Rename to simpler name
+mv "rancher-kubeconfig-updater-${OS}-${ARCH}" rancher-kubeconfig-updater
+
+# Make it executable
+chmod +x rancher-kubeconfig-updater
+
+# Move to PATH (optional)
+sudo mv rancher-kubeconfig-updater /usr/local/bin/
+```
+
+### Windows
+
+```powershell
+# Download the latest release
+curl.exe -LO https://github.com/chenwei791129/rancher-kubeconfig-updater/releases/latest/download/rancher-kubeconfig-updater-windows-amd64.exe
+
+# Rename to simpler name
+ren rancher-kubeconfig-updater-windows-amd64.exe rancher-kubeconfig-updater.exe
+
+# Move to a directory in your PATH (optional)
+move rancher-kubeconfig-updater.exe C:\Windows\System32\
 ```
 
 ## Configuration
@@ -72,20 +105,6 @@ Use LDAP authentication:
 
 ```bash
 ./rancher-kubeconfig-updater --auth-type ldap
-```
-
-Combine options:
-
-```bash
-./rancher-kubeconfig-updater -a --auth-type ldap
-```
-
-Show help:
-
-```bash
-./rancher-kubeconfig-updater -h
-# or
-./rancher-kubeconfig-updater --help
 ```
 
 ## Flags
