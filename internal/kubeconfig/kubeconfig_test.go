@@ -866,9 +866,6 @@ func TestCreateBackup_FilenameFormat(t *testing.T) {
 		if strings.HasPrefix(entry.Name(), "config.backup.") {
 			// Verify filename format: config.backup.YYYYMMDD-HHMMSS.mmmmmm
 			name := entry.Name()
-			if !strings.HasPrefix(name, "config.backup.") {
-				t.Errorf("Unexpected backup filename format: %s", name)
-			}
 
 			// Extract timestamp part
 			parts := strings.Split(name, ".")
