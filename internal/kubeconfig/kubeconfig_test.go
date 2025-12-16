@@ -462,7 +462,7 @@ func TestSaveKubeconfig_YAMLSerialization(t *testing.T) {
 }
 
 // ============================================================================
-// UpdateTokenByName Tests (P0)
+// UpdateTokenByName Tests
 // ============================================================================
 
 // TestUpdateTokenByName_ExistingUser tests updating an existing user's token
@@ -575,7 +575,7 @@ func TestUpdateTokenByName_RancherURLFormatting(t *testing.T) {
 			name:        "URL with trailing slash",
 			rancherURL:  "https://rancher.example.com/",
 			clusterID:   "c-abc123",
-			expectedURL: "https://rancher.example.com//k8s/clusters/c-abc123",
+			expectedURL: "https://rancher.example.com/k8s/clusters/c-abc123",
 		},
 		{
 			name:        "HTTP URL",
