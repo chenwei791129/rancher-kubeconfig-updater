@@ -6,3 +6,6 @@
 # Build output
 rancher-kubeconfig-updater
 
+# GitHub instructions
+!.github/instructions/
+
