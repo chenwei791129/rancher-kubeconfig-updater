@@ -266,23 +266,6 @@ func TestLoadKubeconfig_InvalidYAML(t *testing.T) {
 	}
 }
 
-// TestLoadKubeconfig_PathExpansion tests path expansion with tilde
-func TestLoadKubeconfig_PathExpansion(t *testing.T) {
-	// Test with empty path (should use default)
-	config, err := LoadKubeconfig("")
-	if err != nil {
-		// It's okay if default path doesn't exist
-		if !strings.Contains(err.Error(), "no such file") && !os.IsNotExist(err) {
-			t.Errorf("Unexpected error for empty path: %v", err)
-		}
-	} else {
-		// If it loaded, verify it's a valid structure
-		if config.APIVersion == "" {
-			t.Error("Expected APIVersion to be set")
-		}
-	}
-}
-
 // TestLoadKubeconfig_EmptyPath tests loading with empty path
 func TestLoadKubeconfig_EmptyPath(t *testing.T) {
 	// Empty path should use default path
