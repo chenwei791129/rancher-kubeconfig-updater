@@ -82,10 +82,12 @@ func (c *Kubeconfig) UpdateTokenByName(clusterID, clusterName, token, rancherURL
 	// If auto-create is enabled, create new cluster, context, and user entries
 	if autoCreate {
 		// Create new cluster entry with correct server URL using cluster ID
+		// Remove trailing slash from rancherURL to avoid double slashes
+		cleanURL := strings.TrimSuffix(rancherURL, "/")
 		newCluster := ConfigCluster{
 			Name: clusterName,
 			Cluster: map[string]any{
-				"server": rancherURL + "/k8s/clusters/" + clusterID,
+				"server": cleanURL + "/k8s/clusters/" + clusterID,
 			},
 		}
 		c.Clusters = append(c.Clusters, newCluster)
