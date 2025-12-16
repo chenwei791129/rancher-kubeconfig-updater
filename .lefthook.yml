@@ -1,0 +1,15 @@
+# EXAMPLE USAGE:
+#
+#   Refer for explanation to following link:
+#   https://lefthook.dev/configuration/
+#
+
+pre-push:
+  commands:
+    test:
+      run: go test ./...
+
+pre-commit:
+  commands:
+    golangci-lint:
+      run: golangci-lint run
