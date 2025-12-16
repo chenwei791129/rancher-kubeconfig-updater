@@ -51,7 +51,9 @@ func run(cmd *cobra.Command, args []string) {
 	logConfig.EncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
 	logConfig.EncoderConfig.ConsoleSeparator = " | "
 	logger, _ := logConfig.Build()
-	defer logger.Sync()
+	defer func() {
+		_ = logger.Sync()
+	}()
 
 	// Get configuration with priority: Flag > Env > Default
 	rancherURL := os.Getenv("RANCHER_URL")
