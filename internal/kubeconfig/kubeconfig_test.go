@@ -641,7 +641,7 @@ func TestUpdateTokenByName_SpecialCharacters(t *testing.T) {
 }
 
 // ============================================================================
-// atomicWriteFile Tests (P1)
+// atomicWriteFile Tests
 // ============================================================================
 
 // TestAtomicWriteFile_Success tests successful atomic file write
@@ -768,7 +768,7 @@ func TestAtomicWriteFile_DifferentPermissions(t *testing.T) {
 }
 
 // ============================================================================
-// createBackup Tests (P2)
+// createBackup Tests
 // ============================================================================
 
 // TestCreateBackup_Success tests successful backup creation
@@ -949,7 +949,7 @@ func TestCreateBackup_Permissions(t *testing.T) {
 }
 
 // ============================================================================
-// Integration Tests (P1)
+// Integration Tests
 // ============================================================================
 
 // TestIntegration_CompleteUpdateFlow tests the complete flow
