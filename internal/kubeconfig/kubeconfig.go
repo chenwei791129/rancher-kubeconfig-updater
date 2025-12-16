@@ -226,15 +226,17 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	tmpPath := tmpFile.Name()
 
 	// Ensure cleanup of temp file on failure
-	defer os.Remove(tmpPath)
+	defer func() {
+		_ = os.Remove(tmpPath)
+	}()
 
 	if _, err := tmpFile.Write(data); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return fmt.Errorf("failed to write temp file: %w", err)
 	}
 
 	if err := tmpFile.Chmod(perm); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return fmt.Errorf("failed to set permissions: %w", err)
 	}
 

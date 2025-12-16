@@ -103,7 +103,7 @@ func TestNewClient_WithHTTPTest(t *testing.T) {
 
 		// Respond with contract-compliant data
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"token": "test-token-from-server"}`))
+		_, _ = w.Write([]byte(`{"token": "test-token-from-server"}`))
 	}))
 	defer server.Close()
 
@@ -185,7 +185,7 @@ func TestGetRancherToken_Local(t *testing.T) {
 		assert.Equal(t, "login", r.URL.Query().Get("action"))
 
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"token": "local-token-123"}`))
+		_, _ = w.Write([]byte(`{"token": "local-token-123"}`))
 	}))
 	defer server.Close()
 
@@ -209,7 +209,7 @@ func TestGetRancherToken_LDAP(t *testing.T) {
 		assert.Equal(t, "login", r.URL.Query().Get("action"))
 
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"token": "ldap-token-abc"}`))
+		_, _ = w.Write([]byte(`{"token": "ldap-token-abc"}`))
 	}))
 	defer server.Close()
 
