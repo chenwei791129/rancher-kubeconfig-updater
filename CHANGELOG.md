@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.2.0...v1.2.1) (2025-12-16)
+
+
+### Bug Fixes
+
+* **kubeconfig:** remove trailing slash from Rancher URL to prevent double slashes ([f112fec](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/f112fec826fce9a4b0a43ff8ea58c4b6b015bc61))
+
 ## [1.2.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.1.0...v1.2.0) (2025-12-12)
 
 
