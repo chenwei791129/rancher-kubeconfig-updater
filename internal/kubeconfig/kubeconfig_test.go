@@ -262,7 +262,7 @@ func TestSaveKubeconfig_Success(t *testing.T) {
 
 	config := createTestKubeconfig()
 
-	err := SaveKubeconfig(config, testFile)
+	err := SaveKubeconfig(config, testFile, nil)
 	if err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
@@ -297,7 +297,7 @@ func TestSaveKubeconfig_AutoCreateDirectory(t *testing.T) {
 
 	config := createTestKubeconfig()
 
-	err := SaveKubeconfig(config, nestedPath)
+	err := SaveKubeconfig(config, nestedPath, nil)
 	if err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
@@ -325,14 +325,14 @@ func TestSaveKubeconfig_BackupCreation(t *testing.T) {
 	// Create initial file
 	initialConfig := createTestKubeconfig()
 	initialConfig.AuthInfos["test-cluster"].Token = "old-token"
-	if err := SaveKubeconfig(initialConfig, testFile); err != nil {
+	if err := SaveKubeconfig(initialConfig, testFile, nil); err != nil {
 		t.Fatalf("Failed to create initial file: %v", err)
 	}
 
 	// Save updated config
 	updatedConfig := createTestKubeconfig()
 	updatedConfig.AuthInfos["test-cluster"].Token = "new-token"
-	if err := SaveKubeconfig(updatedConfig, testFile); err != nil {
+	if err := SaveKubeconfig(updatedConfig, testFile, nil); err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
 
@@ -394,7 +394,7 @@ func TestSaveKubeconfig_YAMLSerialization(t *testing.T) {
 		Token: "token-1",
 	}
 
-	if err := SaveKubeconfig(config, testFile); err != nil {
+	if err := SaveKubeconfig(config, testFile, nil); err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
 
@@ -583,9 +583,12 @@ func TestCreateBackup_Success(t *testing.T) {
 	}
 
 	// Create backup
-	err := createBackup(testFile)
+	backupPath, err := createBackup(testFile)
 	if err != nil {
 		t.Fatalf("createBackup() error = %v", err)
+	}
+	if backupPath == "" {
+		t.Fatal("createBackup() should return backup path")
 	}
 
 	// Find backup file
@@ -623,9 +626,12 @@ func TestCreateBackup_FileNotExist(t *testing.T) {
 	nonExistentFile := filepath.Join(tmpDir, "does-not-exist")
 
 	// Should not return error for non-existent file
-	err := createBackup(nonExistentFile)
+	backupPath, err := createBackup(nonExistentFile)
 	if err != nil {
 		t.Errorf("createBackup() should not error for non-existent file, got: %v", err)
+	}
+	if backupPath != "" {
+		t.Error("createBackup() should return empty path for non-existent file")
 	}
 
 	// Verify no backup was created
@@ -652,8 +658,12 @@ func TestCreateBackup_FilenameFormat(t *testing.T) {
 	}
 
 	// Create backup
-	if err := createBackup(testFile); err != nil {
+	backupPath, err := createBackup(testFile)
+	if err != nil {
 		t.Fatalf("createBackup() error = %v", err)
+	}
+	if backupPath == "" {
+		t.Fatal("createBackup() should return backup path")
 	}
 
 	// Find and verify backup filename format
@@ -696,9 +706,12 @@ func TestCreateBackup_Directory(t *testing.T) {
 	}
 
 	// Should return error for directory
-	err := createBackup(subDir)
+	backupPath, err := createBackup(subDir)
 	if err == nil {
 		t.Error("createBackup() should return error for directory")
+	}
+	if backupPath != "" {
+		t.Error("createBackup() should return empty path on error")
 	}
 	if !strings.Contains(err.Error(), "directory") {
 		t.Errorf("Expected directory error, got: %v", err)
@@ -720,8 +733,12 @@ func TestCreateBackup_Permissions(t *testing.T) {
 	}
 
 	// Create backup
-	if err := createBackup(testFile); err != nil {
+	backupPath, err := createBackup(testFile)
+	if err != nil {
 		t.Fatalf("createBackup() error = %v", err)
+	}
+	if backupPath == "" {
+		t.Fatal("createBackup() should return backup path")
 	}
 
 	// Find backup and verify it has secure permissions
@@ -783,7 +800,7 @@ func TestIntegration_CompleteUpdateFlow(t *testing.T) {
 	}
 
 	// Step 3: Save config
-	err = SaveKubeconfig(config, configPath)
+	err = SaveKubeconfig(config, configPath, nil)
 	if err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
@@ -808,7 +825,7 @@ func TestIntegration_CompleteUpdateFlow(t *testing.T) {
 	}
 
 	// Step 6: Save again (should create backup)
-	err = SaveKubeconfig(reloaded, configPath)
+	err = SaveKubeconfig(reloaded, configPath, nil)
 	if err != nil {
 		t.Fatalf("SaveKubeconfig() error on second save: %v", err)
 	}
@@ -874,7 +891,7 @@ func TestIntegration_FirstTimeUse(t *testing.T) {
 	}
 
 	// Save
-	err = SaveKubeconfig(config, configPath)
+	err = SaveKubeconfig(config, configPath, nil)
 	if err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
@@ -920,12 +937,52 @@ func TestIntegration_MultipleUpdates(t *testing.T) {
 	}
 
 	// Save and verify final state
-	if err := SaveKubeconfig(config, configPath); err != nil {
+	if err := SaveKubeconfig(config, configPath, nil); err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
 
 	final, _ := LoadKubeconfig(configPath)
 	if final.AuthInfos["test-cluster"].Token != "token-v3" {
 		t.Errorf("Expected final token token-v3, got %s", final.AuthInfos["test-cluster"].Token)
+	}
+}
+
+// TestSaveKubeconfig_WithLogger tests that backup file path is logged when logger is provided
+func TestSaveKubeconfig_WithLogger(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "config")
+
+	// Create initial file
+	initialConfig := createTestKubeconfig()
+	if err := SaveKubeconfig(initialConfig, testFile, nil); err != nil {
+		t.Fatalf("Failed to create initial file: %v", err)
+	}
+
+	// Save again with a logger to trigger backup
+	updatedConfig := createTestKubeconfig()
+	updatedConfig.AuthInfos["test-cluster"].Token = "updated-token"
+	
+	// Create a logger to verify the backup path is logged
+	logger := createTestLogger()
+	if err := SaveKubeconfig(updatedConfig, testFile, logger); err != nil {
+		t.Fatalf("SaveKubeconfig() error = %v", err)
+	}
+
+	// Verify backup file was created
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to read directory: %v", err)
+	}
+
+	backupFound := false
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "config.backup.") {
+			backupFound = true
+			break
+		}
+	}
+
+	if !backupFound {
+		t.Error("Backup file was not created")
 	}
 }
