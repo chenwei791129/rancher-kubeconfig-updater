@@ -173,10 +173,6 @@ t.Fatalf("LoadKubeconfig() error = %v", err)
 }
 
 // Verify structure
-if config.APIVersion != "v1" {
-}
-if config.Kind != "Config" {
-}
 if len(config.Clusters) != 1 {
 t.Errorf("Expected 1 cluster, got %d", len(config.Clusters))
 }
@@ -213,10 +209,6 @@ t.Fatalf("LoadKubeconfig() should not return error for non-existent file, got: %
 }
 
 // Should return empty but valid structure
-if config.APIVersion != "v1" {
-}
-if config.Kind != "Config" {
-}
 if config.Clusters == nil {
 t.Error("Expected non-nil Clusters map")
 }
@@ -893,10 +885,6 @@ if err != nil {
 t.Fatalf("Failed to reload: %v", err)
 }
 
-if reloaded.APIVersion != "v1" {
-}
-if reloaded.Kind != "Config" {
-}
 if len(reloaded.Clusters) != 2 {
 t.Errorf("Expected 2 clusters after reload, got %d", len(reloaded.Clusters))
 }
