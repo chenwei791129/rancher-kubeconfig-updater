@@ -100,7 +100,7 @@ func SaveKubeconfig(c *api.Config, path string, logger *zap.Logger) error {
 
 	// Log backup path if a backup was created
 	if backupPath != "" && logger != nil {
-		logger.Info("Created backup of kubeconfig file: " + backupPath)
+		logger.Info("Created backup of kubeconfig file", zap.String("path", backupPath))
 	}
 
 	// 4. Write kubeconfig using client-go
