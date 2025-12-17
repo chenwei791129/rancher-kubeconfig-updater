@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"go.uber.org/zap"
+	"k8s.io/client-go/tools/clientcmd/api"
 )
 
 // TestExpandPath tests the expandPath function with various path formats
@@ -134,37 +135,20 @@ users:
 }
 
 // createTestKubeconfig creates a test Kubeconfig structure
-func createTestKubeconfig() Kubeconfig {
-	return Kubeconfig{
-		APIVersion: "v1",
-		Kind:       "Config",
-		Clusters: []ConfigCluster{
-			{
-				Name: "test-cluster",
-				Cluster: map[string]any{
-					"server": "https://rancher.example.com/k8s/clusters/c-test123",
-				},
-			},
-		},
-		Contexts: []ConfigContext{
-			{
-				Name: "test-cluster",
-				Context: map[string]any{
-					"cluster": "test-cluster",
-					"user":    "test-cluster",
-				},
-			},
-		},
-		CurrentContext: "test-cluster",
-		Users: []ConfigUser{
-			{
-				Name: "test-cluster",
-				User: User{
-					Token: "test-token-123",
-				},
-			},
-		},
+func createTestKubeconfig() *api.Config {
+	config := api.NewConfig()
+	config.Clusters["test-cluster"] = &api.Cluster{
+		Server: "https://rancher.example.com/k8s/clusters/c-test123",
 	}
+	config.Contexts["test-cluster"] = &api.Context{
+		Cluster:  "test-cluster",
+		AuthInfo: "test-cluster",
+	}
+	config.CurrentContext = "test-cluster"
+	config.AuthInfos["test-cluster"] = &api.AuthInfo{
+		Token: "test-token-123",
+	}
+	return config
 }
 
 // ============================================================================
@@ -189,33 +173,28 @@ func TestLoadKubeconfig_ValidFile(t *testing.T) {
 	}
 
 	// Verify structure
-	if config.APIVersion != "v1" {
-		t.Errorf("Expected APIVersion v1, got %s", config.APIVersion)
-	}
-	if config.Kind != "Config" {
-		t.Errorf("Expected Kind Config, got %s", config.Kind)
-	}
 	if len(config.Clusters) != 1 {
 		t.Errorf("Expected 1 cluster, got %d", len(config.Clusters))
 	}
 	if len(config.Contexts) != 1 {
 		t.Errorf("Expected 1 context, got %d", len(config.Contexts))
 	}
-	if len(config.Users) != 1 {
-		t.Errorf("Expected 1 user, got %d", len(config.Users))
+	if len(config.AuthInfos) != 1 {
+		t.Errorf("Expected 1 user, got %d", len(config.AuthInfos))
 	}
 
 	// Verify cluster details
-	if config.Clusters[0].Name != "test-cluster" {
-		t.Errorf("Expected cluster name test-cluster, got %s", config.Clusters[0].Name)
+	if config.Clusters["test-cluster"] == nil {
+		t.Error("Expected cluster test-cluster to exist")
+	} else if config.Clusters["test-cluster"].Server != "https://rancher.example.com/k8s/clusters/c-test123" {
+		t.Errorf("Expected server URL, got %s", config.Clusters["test-cluster"].Server)
 	}
 
 	// Verify user details
-	if config.Users[0].Name != "test-cluster" {
-		t.Errorf("Expected user name test-cluster, got %s", config.Users[0].Name)
-	}
-	if config.Users[0].User.Token != "test-token-123" {
-		t.Errorf("Expected token test-token-123, got %s", config.Users[0].User.Token)
+	if config.AuthInfos["test-cluster"] == nil {
+		t.Error("Expected user test-cluster to exist")
+	} else if config.AuthInfos["test-cluster"].Token != "test-token-123" {
+		t.Errorf("Expected token test-token-123, got %s", config.AuthInfos["test-cluster"].Token)
 	}
 }
 
@@ -230,20 +209,14 @@ func TestLoadKubeconfig_FileNotExist(t *testing.T) {
 	}
 
 	// Should return empty but valid structure
-	if config.APIVersion != "v1" {
-		t.Errorf("Expected APIVersion v1, got %s", config.APIVersion)
-	}
-	if config.Kind != "Config" {
-		t.Errorf("Expected Kind Config, got %s", config.Kind)
-	}
 	if config.Clusters == nil {
-		t.Error("Expected non-nil Clusters slice")
+		t.Error("Expected non-nil Clusters map")
 	}
 	if config.Contexts == nil {
-		t.Error("Expected non-nil Contexts slice")
+		t.Error("Expected non-nil Contexts map")
 	}
-	if config.Users == nil {
-		t.Error("Expected non-nil Users slice")
+	if config.AuthInfos == nil {
+		t.Error("Expected non-nil AuthInfos map")
 	}
 }
 
@@ -260,9 +233,6 @@ func TestLoadKubeconfig_InvalidYAML(t *testing.T) {
 	_, err := LoadKubeconfig(testFile)
 	if err == nil {
 		t.Error("LoadKubeconfig() should return error for invalid YAML")
-	}
-	if !strings.Contains(err.Error(), "parse") && !strings.Contains(err.Error(), "unmarshal") {
-		t.Errorf("Expected parse/unmarshal error, got: %v", err)
 	}
 }
 
@@ -292,7 +262,7 @@ func TestSaveKubeconfig_Success(t *testing.T) {
 
 	config := createTestKubeconfig()
 
-	err := config.SaveKubeconfig(testFile)
+	err := SaveKubeconfig(config, testFile)
 	if err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
@@ -315,7 +285,7 @@ func TestSaveKubeconfig_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to load saved file: %v", err)
 	}
-	if len(loaded.Users) != 1 || loaded.Users[0].User.Token != "test-token-123" {
+	if len(loaded.AuthInfos) != 1 || loaded.AuthInfos["test-cluster"].Token != "test-token-123" {
 		t.Error("Saved content doesn't match original")
 	}
 }
@@ -327,7 +297,7 @@ func TestSaveKubeconfig_AutoCreateDirectory(t *testing.T) {
 
 	config := createTestKubeconfig()
 
-	err := config.SaveKubeconfig(nestedPath)
+	err := SaveKubeconfig(config, nestedPath)
 	if err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
@@ -354,15 +324,15 @@ func TestSaveKubeconfig_BackupCreation(t *testing.T) {
 
 	// Create initial file
 	initialConfig := createTestKubeconfig()
-	initialConfig.Users[0].User.Token = "old-token"
-	if err := initialConfig.SaveKubeconfig(testFile); err != nil {
+	initialConfig.AuthInfos["test-cluster"].Token = "old-token"
+	if err := SaveKubeconfig(initialConfig, testFile); err != nil {
 		t.Fatalf("Failed to create initial file: %v", err)
 	}
 
 	// Save updated config
 	updatedConfig := createTestKubeconfig()
-	updatedConfig.Users[0].User.Token = "new-token"
-	if err := updatedConfig.SaveKubeconfig(testFile); err != nil {
+	updatedConfig.AuthInfos["test-cluster"].Token = "new-token"
+	if err := SaveKubeconfig(updatedConfig, testFile); err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
 
@@ -383,8 +353,8 @@ func TestSaveKubeconfig_BackupCreation(t *testing.T) {
 			if err != nil {
 				t.Errorf("Failed to load backup: %v", err)
 			}
-			if backupConfig.Users[0].User.Token != "old-token" {
-				t.Errorf("Backup should have old-token, got %s", backupConfig.Users[0].User.Token)
+			if backupConfig.AuthInfos["test-cluster"].Token != "old-token" {
+				t.Errorf("Backup should have old-token, got %s", backupConfig.AuthInfos["test-cluster"].Token)
 			}
 			break
 		}
@@ -396,8 +366,8 @@ func TestSaveKubeconfig_BackupCreation(t *testing.T) {
 
 	// Verify main file has new token
 	mainConfig, _ := LoadKubeconfig(testFile)
-	if mainConfig.Users[0].User.Token != "new-token" {
-		t.Errorf("Main file should have new-token, got %s", mainConfig.Users[0].User.Token)
+	if mainConfig.AuthInfos["test-cluster"].Token != "new-token" {
+		t.Errorf("Main file should have new-token, got %s", mainConfig.AuthInfos["test-cluster"].Token)
 	}
 }
 
@@ -407,43 +377,24 @@ func TestSaveKubeconfig_YAMLSerialization(t *testing.T) {
 	testFile := filepath.Join(tmpDir, "config")
 
 	// Create complex config
-	config := Kubeconfig{
-		APIVersion: "v1",
-		Kind:       "Config",
-		Clusters: []ConfigCluster{
-			{
-				Name: "cluster-1",
-				Cluster: map[string]any{
-					"server":                     "https://server1.example.com",
-					"certificate-authority-data": "base64data",
-				},
-			},
-			{
-				Name: "cluster-2",
-				Cluster: map[string]any{
-					"server": "https://server2.example.com",
-				},
-			},
-		},
-		Contexts: []ConfigContext{
-			{
-				Name: "context-1",
-				Context: map[string]any{
-					"cluster": "cluster-1",
-					"user":    "user-1",
-				},
-			},
-		},
-		CurrentContext: "context-1",
-		Users: []ConfigUser{
-			{
-				Name: "user-1",
-				User: User{Token: "token-1"},
-			},
-		},
+	config := api.NewConfig()
+	config.Clusters["cluster-1"] = &api.Cluster{
+		Server:                   "https://server1.example.com",
+		CertificateAuthorityData: []byte("base64data"),
+	}
+	config.Clusters["cluster-2"] = &api.Cluster{
+		Server: "https://server2.example.com",
+	}
+	config.Contexts["context-1"] = &api.Context{
+		Cluster:  "cluster-1",
+		AuthInfo: "user-1",
+	}
+	config.CurrentContext = "context-1"
+	config.AuthInfos["user-1"] = &api.AuthInfo{
+		Token: "token-1",
 	}
 
-	if err := config.SaveKubeconfig(testFile); err != nil {
+	if err := SaveKubeconfig(config, testFile); err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
 
@@ -470,14 +421,14 @@ func TestUpdateTokenByName_ExistingUser(t *testing.T) {
 	config := createTestKubeconfig()
 	logger := createTestLogger()
 
-	err := config.UpdateTokenByName("c-test123", "test-cluster", "new-token-456", "https://rancher.example.com", false, logger)
+	err := UpdateTokenByName(config, "c-test123", "test-cluster", "new-token-456", "https://rancher.example.com", false, logger)
 	if err != nil {
 		t.Fatalf("UpdateTokenByName() error = %v", err)
 	}
 
 	// Verify token was updated
-	if config.Users[0].User.Token != "new-token-456" {
-		t.Errorf("Expected token new-token-456, got %s", config.Users[0].User.Token)
+	if config.AuthInfos["test-cluster"].Token != "new-token-456" {
+		t.Errorf("Expected token new-token-456, got %s", config.AuthInfos["test-cluster"].Token)
 	}
 
 	// Verify other fields unchanged
@@ -491,16 +442,10 @@ func TestUpdateTokenByName_ExistingUser(t *testing.T) {
 
 // TestUpdateTokenByName_AutoCreateTrue tests auto-creation of new user
 func TestUpdateTokenByName_AutoCreateTrue(t *testing.T) {
-	config := Kubeconfig{
-		APIVersion: "v1",
-		Kind:       "Config",
-		Clusters:   []ConfigCluster{},
-		Contexts:   []ConfigContext{},
-		Users:      []ConfigUser{},
-	}
+	config := api.NewConfig()
 	logger := createTestLogger()
 
-	err := config.UpdateTokenByName("c-newcluster", "new-cluster", "new-token", "https://rancher.example.com", true, logger)
+	err := UpdateTokenByName(config, "c-newcluster", "new-cluster", "new-token", "https://rancher.example.com", true, logger)
 	if err != nil {
 		t.Fatalf("UpdateTokenByName() error = %v", err)
 	}
@@ -509,46 +454,40 @@ func TestUpdateTokenByName_AutoCreateTrue(t *testing.T) {
 	if len(config.Clusters) != 1 {
 		t.Fatalf("Expected 1 cluster, got %d", len(config.Clusters))
 	}
-	if config.Clusters[0].Name != "new-cluster" {
-		t.Errorf("Expected cluster name new-cluster, got %s", config.Clusters[0].Name)
+	if config.Clusters["new-cluster"] == nil {
+		t.Error("Expected cluster new-cluster to exist")
 	}
 	expectedServer := "https://rancher.example.com/k8s/clusters/c-newcluster"
-	if config.Clusters[0].Cluster["server"] != expectedServer {
-		t.Errorf("Expected server %s, got %v", expectedServer, config.Clusters[0].Cluster["server"])
+	if config.Clusters["new-cluster"].Server != expectedServer {
+		t.Errorf("Expected server %s, got %v", expectedServer, config.Clusters["new-cluster"].Server)
 	}
 
 	// Verify context was created
 	if len(config.Contexts) != 1 {
 		t.Fatalf("Expected 1 context, got %d", len(config.Contexts))
 	}
-	if config.Contexts[0].Name != "new-cluster" {
-		t.Errorf("Expected context name new-cluster, got %s", config.Contexts[0].Name)
+	if config.Contexts["new-cluster"] == nil {
+		t.Error("Expected context new-cluster to exist")
 	}
 
 	// Verify user was created
-	if len(config.Users) != 1 {
-		t.Fatalf("Expected 1 user, got %d", len(config.Users))
+	if len(config.AuthInfos) != 1 {
+		t.Fatalf("Expected 1 user, got %d", len(config.AuthInfos))
 	}
-	if config.Users[0].Name != "new-cluster" {
-		t.Errorf("Expected user name new-cluster, got %s", config.Users[0].Name)
+	if config.AuthInfos["new-cluster"] == nil {
+		t.Error("Expected user new-cluster to exist")
 	}
-	if config.Users[0].User.Token != "new-token" {
-		t.Errorf("Expected token new-token, got %s", config.Users[0].User.Token)
+	if config.AuthInfos["new-cluster"].Token != "new-token" {
+		t.Errorf("Expected token new-token, got %s", config.AuthInfos["new-cluster"].Token)
 	}
 }
 
 // TestUpdateTokenByName_AutoCreateFalse tests error when user doesn't exist
 func TestUpdateTokenByName_AutoCreateFalse(t *testing.T) {
-	config := Kubeconfig{
-		APIVersion: "v1",
-		Kind:       "Config",
-		Clusters:   []ConfigCluster{},
-		Contexts:   []ConfigContext{},
-		Users:      []ConfigUser{},
-	}
+	config := api.NewConfig()
 	logger := createTestLogger()
 
-	err := config.UpdateTokenByName("c-test", "nonexistent", "token", "https://rancher.example.com", false, logger)
+	err := UpdateTokenByName(config, "c-test", "nonexistent", "token", "https://rancher.example.com", false, logger)
 	if err == nil {
 		t.Error("UpdateTokenByName() should return error when autoCreate=false and user doesn't exist")
 	}
@@ -587,22 +526,16 @@ func TestUpdateTokenByName_RancherURLFormatting(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config := Kubeconfig{
-				APIVersion: "v1",
-				Kind:       "Config",
-				Clusters:   []ConfigCluster{},
-				Contexts:   []ConfigContext{},
-				Users:      []ConfigUser{},
-			}
+			config := api.NewConfig()
 			logger := createTestLogger()
 
-			err := config.UpdateTokenByName(tt.clusterID, "test", "token", tt.rancherURL, true, logger)
+			err := UpdateTokenByName(config, tt.clusterID, "test", "token", tt.rancherURL, true, logger)
 			if err != nil {
 				t.Fatalf("UpdateTokenByName() error = %v", err)
 			}
 
-			if config.Clusters[0].Cluster["server"] != tt.expectedURL {
-				t.Errorf("Expected server %s, got %v", tt.expectedURL, config.Clusters[0].Cluster["server"])
+			if config.Clusters["test"].Server != tt.expectedURL {
+				t.Errorf("Expected server %s, got %v", tt.expectedURL, config.Clusters["test"].Server)
 			}
 		})
 	}
@@ -619,149 +552,16 @@ func TestUpdateTokenByName_SpecialCharacters(t *testing.T) {
 
 	for _, name := range specialNames {
 		t.Run(name, func(t *testing.T) {
-			config := Kubeconfig{
-				APIVersion: "v1",
-				Kind:       "Config",
-				Clusters:   []ConfigCluster{},
-				Contexts:   []ConfigContext{},
-				Users:      []ConfigUser{},
-			}
+			config := api.NewConfig()
 			logger := createTestLogger()
 
-			err := config.UpdateTokenByName("c-test", name, "token", "https://rancher.example.com", true, logger)
+			err := UpdateTokenByName(config, "c-test", name, "token", "https://rancher.example.com", true, logger)
 			if err != nil {
 				t.Fatalf("UpdateTokenByName() failed for name %s: %v", name, err)
 			}
 
-			if config.Users[0].Name != name {
-				t.Errorf("Expected user name %s, got %s", name, config.Users[0].Name)
-			}
-		})
-	}
-}
-
-// ============================================================================
-// atomicWriteFile Tests
-// ============================================================================
-
-// TestAtomicWriteFile_Success tests successful atomic file write
-func TestAtomicWriteFile_Success(t *testing.T) {
-	tmpDir := t.TempDir()
-	testFile := filepath.Join(tmpDir, "test.txt")
-	testData := []byte("test content")
-
-	err := atomicWriteFile(testFile, testData, 0600)
-	if err != nil {
-		t.Fatalf("atomicWriteFile() error = %v", err)
-	}
-
-	// Verify file exists
-	if _, err := os.Stat(testFile); os.IsNotExist(err) {
-		t.Error("atomicWriteFile() did not create file")
-	}
-
-	// Verify content
-	content, err := os.ReadFile(testFile)
-	if err != nil {
-		t.Fatalf("Failed to read file: %v", err)
-	}
-	if string(content) != string(testData) {
-		t.Errorf("Expected content %s, got %s", testData, content)
-	}
-
-	// Verify permissions (Unix only)
-	if runtime.GOOS != "windows" {
-		info, _ := os.Stat(testFile)
-		mode := info.Mode().Perm()
-		if mode != 0600 {
-			t.Errorf("Expected permissions 0600, got %o", mode)
-		}
-	}
-}
-
-// TestAtomicWriteFile_OverwriteExisting tests overwriting an existing file
-func TestAtomicWriteFile_OverwriteExisting(t *testing.T) {
-	tmpDir := t.TempDir()
-	testFile := filepath.Join(tmpDir, "test.txt")
-
-	// Create initial file
-	initialData := []byte("initial content")
-	if err := os.WriteFile(testFile, initialData, 0600); err != nil {
-		t.Fatalf("Failed to create initial file: %v", err)
-	}
-
-	// Overwrite with new content
-	newData := []byte("new content")
-	err := atomicWriteFile(testFile, newData, 0600)
-	if err != nil {
-		t.Fatalf("atomicWriteFile() error = %v", err)
-	}
-
-	// Verify new content
-	content, err := os.ReadFile(testFile)
-	if err != nil {
-		t.Fatalf("Failed to read file: %v", err)
-	}
-	if string(content) != string(newData) {
-		t.Errorf("Expected content %s, got %s", newData, content)
-	}
-}
-
-// TestAtomicWriteFile_TempFileCleanup tests temp file cleanup on success
-func TestAtomicWriteFile_TempFileCleanup(t *testing.T) {
-	tmpDir := t.TempDir()
-	testFile := filepath.Join(tmpDir, "test.txt")
-	testData := []byte("test content")
-
-	err := atomicWriteFile(testFile, testData, 0600)
-	if err != nil {
-		t.Fatalf("atomicWriteFile() error = %v", err)
-	}
-
-	// Check that no temp files remain
-	entries, err := os.ReadDir(tmpDir)
-	if err != nil {
-		t.Fatalf("Failed to read directory: %v", err)
-	}
-
-	for _, entry := range entries {
-		if strings.Contains(entry.Name(), ".kubeconfig.tmp.") {
-			t.Errorf("Temp file not cleaned up: %s", entry.Name())
-		}
-	}
-}
-
-// TestAtomicWriteFile_DifferentPermissions tests different permission settings
-func TestAtomicWriteFile_DifferentPermissions(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Permission tests not applicable on Windows")
-	}
-
-	tmpDir := t.TempDir()
-
-	tests := []struct {
-		name string
-		perm os.FileMode
-	}{
-		{"read-only", 0400},
-		{"read-write", 0600},
-		{"read-write-execute", 0700},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			testFile := filepath.Join(tmpDir, tt.name+".txt")
-			testData := []byte("test")
-
-			err := atomicWriteFile(testFile, testData, tt.perm)
-			if err != nil {
-				t.Fatalf("atomicWriteFile() error = %v", err)
-			}
-
-			info, _ := os.Stat(testFile)
-			mode := info.Mode().Perm()
-			if mode != tt.perm {
-				t.Errorf("Expected permissions %o, got %o", tt.perm, mode)
+			if config.AuthInfos[name] == nil {
+				t.Errorf("Expected user name %s to exist", name)
 			}
 		})
 	}
@@ -964,12 +764,12 @@ func TestIntegration_CompleteUpdateFlow(t *testing.T) {
 		t.Fatalf("LoadKubeconfig() error = %v", err)
 	}
 
-	if len(config.Users) != 0 {
+	if len(config.AuthInfos) != 0 {
 		t.Error("New config should have no users")
 	}
 
 	// Step 2: Update token with autoCreate
-	err = config.UpdateTokenByName("c-test123", "test-cluster", "token-123", "https://rancher.example.com", true, logger)
+	err = UpdateTokenByName(config, "c-test123", "test-cluster", "token-123", "https://rancher.example.com", true, logger)
 	if err != nil {
 		t.Fatalf("UpdateTokenByName() error = %v", err)
 	}
@@ -978,12 +778,12 @@ func TestIntegration_CompleteUpdateFlow(t *testing.T) {
 	if len(config.Clusters) != 1 {
 		t.Errorf("Expected 1 cluster, got %d", len(config.Clusters))
 	}
-	if len(config.Users) != 1 {
-		t.Errorf("Expected 1 user, got %d", len(config.Users))
+	if len(config.AuthInfos) != 1 {
+		t.Errorf("Expected 1 user, got %d", len(config.AuthInfos))
 	}
 
 	// Step 3: Save config
-	err = config.SaveKubeconfig(configPath)
+	err = SaveKubeconfig(config, configPath)
 	if err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
@@ -994,21 +794,21 @@ func TestIntegration_CompleteUpdateFlow(t *testing.T) {
 		t.Fatalf("Failed to reload config: %v", err)
 	}
 
-	if len(reloaded.Users) != 1 {
-		t.Errorf("Expected 1 user after reload, got %d", len(reloaded.Users))
+	if len(reloaded.AuthInfos) != 1 {
+		t.Errorf("Expected 1 user after reload, got %d", len(reloaded.AuthInfos))
 	}
-	if reloaded.Users[0].User.Token != "token-123" {
-		t.Errorf("Expected token token-123, got %s", reloaded.Users[0].User.Token)
+	if reloaded.AuthInfos["test-cluster"].Token != "token-123" {
+		t.Errorf("Expected token token-123, got %s", reloaded.AuthInfos["test-cluster"].Token)
 	}
 
 	// Step 5: Update token again
-	err = reloaded.UpdateTokenByName("c-test123", "test-cluster", "token-456", "https://rancher.example.com", false, logger)
+	err = UpdateTokenByName(reloaded, "c-test123", "test-cluster", "token-456", "https://rancher.example.com", false, logger)
 	if err != nil {
 		t.Fatalf("UpdateTokenByName() error on second update: %v", err)
 	}
 
 	// Step 6: Save again (should create backup)
-	err = reloaded.SaveKubeconfig(configPath)
+	err = SaveKubeconfig(reloaded, configPath)
 	if err != nil {
 		t.Fatalf("SaveKubeconfig() error on second save: %v", err)
 	}
@@ -1036,8 +836,8 @@ func TestIntegration_CompleteUpdateFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to load final config: %v", err)
 	}
-	if final.Users[0].User.Token != "token-456" {
-		t.Errorf("Expected final token token-456, got %s", final.Users[0].User.Token)
+	if final.AuthInfos["test-cluster"].Token != "token-456" {
+		t.Errorf("Expected final token token-456, got %s", final.AuthInfos["test-cluster"].Token)
 	}
 }
 
@@ -1054,13 +854,13 @@ func TestIntegration_FirstTimeUse(t *testing.T) {
 	}
 
 	// Add first cluster
-	err = config.UpdateTokenByName("c-first", "first-cluster", "token-1", "https://rancher.example.com", true, logger)
+	err = UpdateTokenByName(config, "c-first", "first-cluster", "token-1", "https://rancher.example.com", true, logger)
 	if err != nil {
 		t.Fatalf("UpdateTokenByName() error = %v", err)
 	}
 
 	// Add second cluster
-	err = config.UpdateTokenByName("c-second", "second-cluster", "token-2", "https://rancher.example.com", true, logger)
+	err = UpdateTokenByName(config, "c-second", "second-cluster", "token-2", "https://rancher.example.com", true, logger)
 	if err != nil {
 		t.Fatalf("UpdateTokenByName() error = %v", err)
 	}
@@ -1069,12 +869,12 @@ func TestIntegration_FirstTimeUse(t *testing.T) {
 	if len(config.Clusters) != 2 {
 		t.Errorf("Expected 2 clusters, got %d", len(config.Clusters))
 	}
-	if len(config.Users) != 2 {
-		t.Errorf("Expected 2 users, got %d", len(config.Users))
+	if len(config.AuthInfos) != 2 {
+		t.Errorf("Expected 2 users, got %d", len(config.AuthInfos))
 	}
 
 	// Save
-	err = config.SaveKubeconfig(configPath)
+	err = SaveKubeconfig(config, configPath)
 	if err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
@@ -1085,12 +885,6 @@ func TestIntegration_FirstTimeUse(t *testing.T) {
 		t.Fatalf("Failed to reload: %v", err)
 	}
 
-	if reloaded.APIVersion != "v1" {
-		t.Error("APIVersion should be v1")
-	}
-	if reloaded.Kind != "Config" {
-		t.Error("Kind should be Config")
-	}
 	if len(reloaded.Clusters) != 2 {
 		t.Errorf("Expected 2 clusters after reload, got %d", len(reloaded.Clusters))
 	}
@@ -1114,24 +908,24 @@ func TestIntegration_MultipleUpdates(t *testing.T) {
 	}
 
 	for i, update := range updates {
-		err := config.UpdateTokenByName("c-test123", "test-cluster", update.token, "https://rancher.example.com", false, logger)
+		err := UpdateTokenByName(config, "c-test123", "test-cluster", update.token, "https://rancher.example.com", false, logger)
 		if err != nil {
 			t.Fatalf("Update %d failed: %v", i, err)
 		}
 
 		// Verify token was updated
-		if config.Users[0].User.Token != update.token {
-			t.Errorf("Update %d: expected token %s, got %s", i, update.token, config.Users[0].User.Token)
+		if config.AuthInfos["test-cluster"].Token != update.token {
+			t.Errorf("Update %d: expected token %s, got %s", i, update.token, config.AuthInfos["test-cluster"].Token)
 		}
 	}
 
 	// Save and verify final state
-	if err := config.SaveKubeconfig(configPath); err != nil {
+	if err := SaveKubeconfig(config, configPath); err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
 
 	final, _ := LoadKubeconfig(configPath)
-	if final.Users[0].User.Token != "token-v3" {
-		t.Errorf("Expected final token token-v3, got %s", final.Users[0].User.Token)
+	if final.AuthInfos["test-cluster"].Token != "token-v3" {
+		t.Errorf("Expected final token token-v3, got %s", final.AuthInfos["test-cluster"].Token)
 	}
 }

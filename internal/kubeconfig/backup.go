@@ -32,6 +32,10 @@ func createBackup(path string) error {
 	backupPath := fmt.Sprintf("%s.backup.%s", path,
 		time.Now().Format("20060102-150405.000000"))
 
-	// Write backup using atomic write with platform-appropriate permissions
-	return atomicWriteFile(backupPath, data, getSecureFileMode())
+	// Write backup with platform-appropriate permissions
+	if err := os.WriteFile(backupPath, data, getSecureFileMode()); err != nil {
+		return fmt.Errorf("failed to write backup file: %w", err)
+	}
+
+	return nil
 }

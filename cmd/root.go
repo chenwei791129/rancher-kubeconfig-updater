@@ -73,7 +73,7 @@ func run(cmd *cobra.Command, args []string) {
 	}
 
 	// Check if this is a new config (no users means it's newly created)
-	if len(kubecfg.Users) == 0 && len(kubecfg.Clusters) == 0 && len(kubecfg.Contexts) == 0 {
+	if len(kubecfg.AuthInfos) == 0 && len(kubecfg.Clusters) == 0 && len(kubecfg.Contexts) == 0 {
 		logger.Info("Creating new kubeconfig file at default location")
 	}
 
@@ -102,7 +102,7 @@ func run(cmd *cobra.Command, args []string) {
 
 	for _, v := range clusters {
 		clusterToken := client.GetClusterToken(v.ID)
-		err = kubecfg.UpdateTokenByName(v.ID, v.Name, clusterToken, rancherURL, autoCreate, logger)
+		err = kubeconfig.UpdateTokenByName(kubecfg, v.ID, v.Name, clusterToken, rancherURL, autoCreate, logger)
 		if err != nil {
 			// Error is already logged in UpdateTokenByName
 			continue
@@ -110,7 +110,7 @@ func run(cmd *cobra.Command, args []string) {
 		logger.Info("Successfully updated kubeconfig token for cluster: " + v.Name)
 	}
 
-	err = kubecfg.SaveKubeconfig(kubeconfigPath)
+	err = kubeconfig.SaveKubeconfig(kubecfg, kubeconfigPath)
 	if err != nil {
 		logger.Error("Failed to save kubeconfig file", zap.Error(err))
 		return
