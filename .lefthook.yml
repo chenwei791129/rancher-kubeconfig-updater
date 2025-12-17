@@ -13,6 +13,10 @@ pre-commit:
   commands:
     golangci-lint:
       run: golangci-lint run
+    cloc:
+      only:
+        - run: command -v cloc > /dev/null
+      run: cloc . --quiet --hide-rate
 
 commit-msg:
   commands:
