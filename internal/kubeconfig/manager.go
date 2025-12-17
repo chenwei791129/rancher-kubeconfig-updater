@@ -8,107 +8,68 @@ import (
 	"strings"
 
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/clientcmd/api"
 )
 
-type Kubeconfig struct {
-	APIVersion     string          `yaml:"apiVersion"`
-	Kind           string          `yaml:"kind"`
-	Clusters       []ConfigCluster `yaml:"clusters"`
-	Contexts       []ConfigContext `yaml:"contexts"`
-	CurrentContext string          `yaml:"current-context"`
-	Users          []ConfigUser    `yaml:"users"`
-}
-
-type ConfigCluster struct {
-	Name    string         `yaml:"name"`
-	Cluster map[string]any `yaml:"cluster"`
-}
-
-type ConfigContext struct {
-	Name    string         `yaml:"name"`
-	Context map[string]any `yaml:"context"`
-}
-
-type ConfigUser struct {
-	Name string `yaml:"name"`
-	User User   `yaml:"user"`
-}
-
-type User struct {
-	Token string `yaml:"token"`
-}
-
-func LoadKubeconfig(path string) (Kubeconfig, error) {
-	var config Kubeconfig
-
+func LoadKubeconfig(path string) (*api.Config, error) {
 	expandedPath, err := expandPath(path)
 	if err != nil {
-		return config, fmt.Errorf("failed to expand path: %w", err)
+		return nil, fmt.Errorf("failed to expand path: %w", err)
 	}
 
-	data, err := os.ReadFile(expandedPath)
-	if err != nil {
+	// Check if file exists
+	if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
 		// If file doesn't exist, return a new empty kubeconfig structure
-		if os.IsNotExist(err) {
-			return Kubeconfig{
-				APIVersion: "v1",
-				Kind:       "Config",
-				Clusters:   []ConfigCluster{},
-				Contexts:   []ConfigContext{},
-				Users:      []ConfigUser{},
-			}, nil
-		}
-		return config, fmt.Errorf("failed to read kubeconfig file: %w", err)
+		return api.NewConfig(), nil
 	}
 
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return config, fmt.Errorf("failed to parse kubeconfig YAML: %w", err)
+	// Load kubeconfig using client-go
+	config, err := clientcmd.LoadFromFile(expandedPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load kubeconfig file: %w", err)
 	}
 
 	return config, nil
 }
 
-func (c *Kubeconfig) UpdateTokenByName(clusterID, clusterName, token, rancherURL string, autoCreate bool, logger *zap.Logger) error {
+func UpdateTokenByName(c *api.Config, clusterID, clusterName, token, rancherURL string, autoCreate bool, logger *zap.Logger) error {
 	// Check if user already exists
-	for i, user := range c.Users {
-		if user.Name == clusterName {
-			c.Users[i].User.Token = token
-			return nil
-		}
+	if authInfo, exists := c.AuthInfos[clusterName]; exists {
+		authInfo.Token = token
+		return nil
 	}
 
 	// If auto-create is enabled, create new cluster, context, and user entries
 	if autoCreate {
+		// Initialize maps if nil
+		if c.Clusters == nil {
+			c.Clusters = make(map[string]*api.Cluster)
+		}
+		if c.Contexts == nil {
+			c.Contexts = make(map[string]*api.Context)
+		}
+		if c.AuthInfos == nil {
+			c.AuthInfos = make(map[string]*api.AuthInfo)
+		}
+
 		// Create new cluster entry with correct server URL using cluster ID
 		// Remove trailing slash from rancherURL to avoid double slashes
 		cleanURL := strings.TrimSuffix(rancherURL, "/")
-		newCluster := ConfigCluster{
-			Name: clusterName,
-			Cluster: map[string]any{
-				"server": cleanURL + "/k8s/clusters/" + clusterID,
-			},
+		c.Clusters[clusterName] = &api.Cluster{
+			Server: cleanURL + "/k8s/clusters/" + clusterID,
 		}
-		c.Clusters = append(c.Clusters, newCluster)
 
 		// Create new context entry
-		newContext := ConfigContext{
-			Name: clusterName,
-			Context: map[string]any{
-				"cluster": clusterName,
-				"user":    clusterName,
-			},
+		c.Contexts[clusterName] = &api.Context{
+			Cluster:  clusterName,
+			AuthInfo: clusterName,
 		}
-		c.Contexts = append(c.Contexts, newContext)
 
 		// Create new user entry
-		newUser := ConfigUser{
-			Name: clusterName,
-			User: User{
-				Token: token,
-			},
+		c.AuthInfos[clusterName] = &api.AuthInfo{
+			Token: token,
 		}
-		c.Users = append(c.Users, newUser)
 
 		logger.Info("Created new kubeconfig entry for cluster: " + clusterName)
 		return nil
@@ -118,7 +79,7 @@ func (c *Kubeconfig) UpdateTokenByName(clusterID, clusterName, token, rancherURL
 	return fmt.Errorf("user %s not found in kubeconfig", clusterName)
 }
 
-func (c *Kubeconfig) SaveKubeconfig(path string) error {
+func SaveKubeconfig(c *api.Config, path string) error {
 	// 1. Expand path
 	expandedPath, err := expandPath(path)
 	if err != nil {
@@ -131,20 +92,19 @@ func (c *Kubeconfig) SaveKubeconfig(path string) error {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// 3. Marshal data
-	data, err := yaml.Marshal(c)
-	if err != nil {
-		return fmt.Errorf("failed to marshal kubeconfig to YAML: %w", err)
-	}
-
-	// 4. Create backup if file exists (fail if backup fails)
+	// 3. Create backup if file exists (fail if backup fails)
 	if err := createBackup(expandedPath); err != nil {
 		return fmt.Errorf("failed to create backup: %w", err)
 	}
 
-	// 5. Atomic write with platform-appropriate permissions
-	if err := atomicWriteFile(expandedPath, data, getSecureFileMode()); err != nil {
+	// 4. Write kubeconfig using client-go
+	if err := clientcmd.WriteToFile(*c, expandedPath); err != nil {
 		return fmt.Errorf("failed to write kubeconfig file: %w", err)
+	}
+
+	// 5. Set secure file permissions (client-go might not set them correctly on all platforms)
+	if err := os.Chmod(expandedPath, getSecureFileMode()); err != nil {
+		return fmt.Errorf("failed to set file permissions: %w", err)
 	}
 
 	return nil
@@ -212,41 +172,4 @@ func expandPath(path string) (string, error) {
 
 	// Clean path (normalize separators)
 	return filepath.Clean(path), nil
-}
-
-// atomicWriteFile writes data to a file atomically by writing to a temp file first,
-// then renaming it to the target path. This ensures the file is never in a partially written state.
-func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	tmpFile, err := os.CreateTemp(dir, ".kubeconfig.tmp.*")
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-	tmpPath := tmpFile.Name()
-
-	// Ensure cleanup of temp file on failure
-	defer func() {
-		_ = os.Remove(tmpPath)
-	}()
-
-	if _, err := tmpFile.Write(data); err != nil {
-		_ = tmpFile.Close()
-		return fmt.Errorf("failed to write temp file: %w", err)
-	}
-
-	if err := tmpFile.Chmod(perm); err != nil {
-		_ = tmpFile.Close()
-		return fmt.Errorf("failed to set permissions: %w", err)
-	}
-
-	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temp file: %w", err)
-	}
-
-	// Atomic operation: rename temp file to target path
-	if err := os.Rename(tmpPath, path); err != nil {
-		return fmt.Errorf("failed to rename temp file: %w", err)
-	}
-
-	return nil
 }
