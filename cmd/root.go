@@ -133,7 +133,7 @@ func filterClusters(clusters rancher.Clusters, clusterFilter string, logger *zap
 	// Overall complexity: O(n) where n is the number of clusters
 	allowedClustersRaw := strings.Split(clusterFilter, ",")
 	allowedClustersSet := make(map[string]struct{})
-	
+
 	// Trim whitespace and convert to lowercase for case-insensitive matching
 	for _, c := range allowedClustersRaw {
 		trimmed := strings.TrimSpace(c)
@@ -141,55 +141,65 @@ func filterClusters(clusters rancher.Clusters, clusterFilter string, logger *zap
 			allowedClustersSet[strings.ToLower(trimmed)] = struct{}{}
 		}
 	}
-	
+
 	if len(allowedClustersSet) == 0 {
 		logger.Warn("--cluster flag specified but no valid cluster names provided, processing all clusters")
 		return clusters
 	}
-	
+
 	// Filter clusters
 	filteredClusters := make(rancher.Clusters, 0)
 	addedClusterIDs := make(map[string]struct{})
 	matchedFilters := make(map[string]struct{})
-	
+
 	for _, cluster := range clusters {
 		// Skip if this cluster was already added
 		if _, added := addedClusterIDs[cluster.ID]; added {
 			continue
 		}
-		
+
 		// Check if cluster name or ID matches any of the allowed clusters (case-insensitive)
 		clusterNameLower := strings.ToLower(cluster.Name)
 		clusterIDLower := strings.ToLower(cluster.ID)
-		
-		var matchedFilter string
+
+		nameMatches := false
+		idMatches := false
+
 		if _, exists := allowedClustersSet[clusterNameLower]; exists {
-			matchedFilter = clusterNameLower
-		} else if _, exists := allowedClustersSet[clusterIDLower]; exists {
-			matchedFilter = clusterIDLower
+			nameMatches = true
 		}
-		
-		if matchedFilter != "" {
+		if _, exists := allowedClustersSet[clusterIDLower]; exists {
+			idMatches = true
+		}
+
+		if nameMatches || idMatches {
 			filteredClusters = append(filteredClusters, cluster)
-			matchedFilters[matchedFilter] = struct{}{}
+			// Record all matched filters (both name and ID if they both match)
+			// to prevent false "not found" warnings
+			if nameMatches {
+				matchedFilters[clusterNameLower] = struct{}{}
+			}
+			if idMatches {
+				matchedFilters[clusterIDLower] = struct{}{}
+			}
 			addedClusterIDs[cluster.ID] = struct{}{}
 		}
 	}
-	
+
 	// Log warnings for clusters not found
 	for allowed := range allowedClustersSet {
 		if _, matched := matchedFilters[allowed]; !matched {
 			logger.Warn("Specified cluster not found in Rancher", zap.String("cluster", allowed))
 		}
 	}
-	
+
 	if len(filteredClusters) == 0 {
 		logger.Warn("No clusters matched the specified filter, no clusters will be updated")
 	} else {
-		logger.Info("Filtering clusters based on --cluster flag", 
-			zap.Int("matched", len(filteredClusters)), 
+		logger.Info("Filtering clusters based on --cluster flag",
+			zap.Int("matched", len(filteredClusters)),
 			zap.Int("total", len(clusters)))
 	}
-	
+
 	return filteredClusters
 }

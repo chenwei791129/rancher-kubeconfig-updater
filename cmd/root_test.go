@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // TestFilterClusters_SingleClusterByName tests filtering by a single cluster name
@@ -203,4 +204,47 @@ func TestFilterClusters_BothNameAndIDMatch(t *testing.T) {
 	assert.Len(t, filtered, 1)
 	assert.Equal(t, "production", filtered[0].Name)
 	assert.Equal(t, "c-m-12345", filtered[0].ID)
+}
+
+// TestFilterClusters_BothNameAndIDMatch_NoFalseWarning verifies that when both the name
+// and ID of a cluster are specified in the filter, no "not found" warning should be logged
+// for either the name or the ID. This test exposes a defect in the current implementation
+// where only the first matched filter is recorded, causing the second one to be reported
+// as "not found".
+func TestFilterClusters_BothNameAndIDMatch_NoFalseWarning(t *testing.T) {
+	// Create a logger with observer to capture log output
+	observedZapCore, observedLogs := observer.New(zap.WarnLevel)
+	logger := zap.New(observedZapCore)
+
+	clusters := rancher.Clusters{
+		{ID: "c-m-12345", Name: "production"},
+		{ID: "c-m-67890", Name: "staging"},
+	}
+
+	// Filter contains both the cluster name and ID
+	filtered := filterClusters(clusters, "production,c-m-12345,staging", logger)
+
+	// Should return 2 unique clusters
+	assert.Len(t, filtered, 2)
+
+	// Check that no "not found" warnings were logged
+	// Since both "production" and "c-m-12345" refer to the same cluster,
+	// neither should be reported as "not found"
+	warnLogs := observedLogs.FilterMessage("Specified cluster not found in Rancher").All()
+
+	// This assertion will FAIL with the current implementation, exposing the defect
+	// Expected: 0 warnings (both "production" and "c-m-12345" should be recognized)
+	// Actual: 1 warning (one of them will be reported as "not found")
+	assert.Equal(t, 0, len(warnLogs), "Expected no 'not found' warnings when both name and ID are specified for the same cluster")
+
+	// Additionally verify no warning contains "production" or "c-m-12345"
+	for _, log := range warnLogs {
+		for _, field := range log.Context {
+			if field.Key == "cluster" {
+				clusterValue := field.String
+				assert.NotContains(t, []string{"production", "c-m-12345"}, clusterValue,
+					"Cluster '%s' was incorrectly reported as not found", clusterValue)
+			}
+		}
+	}
 }
