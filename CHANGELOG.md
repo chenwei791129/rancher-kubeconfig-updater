@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.2.1...v1.3.0) (2025-12-18)
+
+
+### Features
+
+* log file path when created backup of kubeconfig file ([#43](https://github.com/chenwei791129/rancher-kubeconfig-updater/issues/43)) ([f0ab2b1](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/f0ab2b11049d8f60fe17fd86608487e3564751b2))
+
 ## [1.2.1](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.2.0...v1.2.1) (2025-12-16)
 
 
