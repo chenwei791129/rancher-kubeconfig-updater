@@ -186,6 +186,7 @@ Use LDAP authentication:
 Flags:
       --auth-type string        Authentication type: 'local' or 'ldap' (default: from RANCHER_AUTH_TYPE env or 'local')
   -a, --auto-create             Automatically create kubeconfig entries for clusters not found in the config
+      --cluster string          Comma-separated list of cluster names or IDs to update
   -h, --help                    help for rancher-kubeconfig-updater
   -p, --password string[="-"]   Rancher Password
   -u, --user string             Rancher Username
@@ -210,6 +211,29 @@ Flags:
 - **`-a, --auto-create`**: Automatically create kubeconfig entries for new clusters discovered in Rancher
 
 - **`--auth-type`**: Specify authentication method (`local` or `ldap`)
+
+- **`--cluster`**: Update tokens for specific clusters only (instead of all clusters)
+  ```bash
+  # Update a single cluster
+  ./rancher-kubeconfig-updater --cluster production -p
+  
+  # Update multiple clusters (comma-separated)
+  ./rancher-kubeconfig-updater --cluster prod,staging,dev -p
+  
+  # Use cluster IDs instead of names
+  ./rancher-kubeconfig-updater --cluster c-m-12345,c-m-67890 -p
+  
+  # Mix cluster names and IDs
+  ./rancher-kubeconfig-updater --cluster production,c-m-67890 -p
+  
+  # Combined with other flags
+  ./rancher-kubeconfig-updater --cluster prod,staging -a --auth-type ldap -p
+  ```
+  > [!TIP]
+  > - Cluster matching is **case-insensitive**
+  > - Both cluster **names** and **IDs** are supported
+  > - The tool will log a warning if a specified cluster is not found
+  > - Whitespace around cluster names is automatically trimmed
 
 **Note**: Command line flags take precedence over environment variables.
 

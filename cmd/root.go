@@ -5,6 +5,7 @@ import (
 	"rancher-kubeconfig-updater/internal/config"
 	"rancher-kubeconfig-updater/internal/kubeconfig"
 	"rancher-kubeconfig-updater/internal/rancher"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -16,6 +17,7 @@ var (
 	authTypeFlag string
 	userFlag     string
 	passwordFlag string
+	clusterFlag  string
 )
 
 func NewRootCmd() *cobra.Command {
@@ -31,6 +33,7 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.Flags().StringVarP(&passwordFlag, "password", "p", "", "Rancher Password")
 	// Set NoOptDefVal for password to allow interactive prompt when flag is present without value
 	rootCmd.Flags().Lookup("password").NoOptDefVal = "-"
+	rootCmd.Flags().StringVar(&clusterFlag, "cluster", "", "Comma-separated list of cluster names or IDs to update")
 
 	return rootCmd
 }
@@ -100,6 +103,11 @@ func run(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	// Filter clusters if --cluster flag is specified
+	if clusterFlag != "" {
+		clusters = filterClusters(clusters, clusterFlag, logger)
+	}
+
 	for _, v := range clusters {
 		clusterToken := client.GetClusterToken(v.ID)
 		err = kubeconfig.UpdateTokenByName(kubecfg, v.ID, v.Name, clusterToken, rancherURL, autoCreate, logger)
@@ -117,4 +125,59 @@ func run(cmd *cobra.Command, args []string) {
 	}
 
 	logger.Info("All cluster tokens have been updated successfully")
+}
+
+// filterClusters filters clusters based on comma-separated cluster names or IDs
+func filterClusters(clusters rancher.Clusters, clusterFilter string, logger *zap.Logger) rancher.Clusters {
+	// Parse comma-separated cluster names/IDs
+	allowedClustersRaw := strings.Split(clusterFilter, ",")
+	allowedClusters := make([]string, 0, len(allowedClustersRaw))
+	
+	// Trim whitespace and convert to lowercase for case-insensitive matching
+	for _, c := range allowedClustersRaw {
+		trimmed := strings.TrimSpace(c)
+		if trimmed != "" {
+			allowedClusters = append(allowedClusters, strings.ToLower(trimmed))
+		}
+	}
+	
+	if len(allowedClusters) == 0 {
+		logger.Warn("--cluster flag specified but no valid cluster names provided, processing all clusters")
+		return clusters
+	}
+	
+	// Filter clusters
+	filteredClusters := make(rancher.Clusters, 0)
+	matchedClusters := make(map[string]bool)
+	
+	for _, cluster := range clusters {
+		// Check if cluster name or ID matches any of the allowed clusters (case-insensitive)
+		clusterNameLower := strings.ToLower(cluster.Name)
+		clusterIDLower := strings.ToLower(cluster.ID)
+		
+		for _, allowed := range allowedClusters {
+			if clusterNameLower == allowed || clusterIDLower == allowed {
+				filteredClusters = append(filteredClusters, cluster)
+				matchedClusters[allowed] = true
+				break
+			}
+		}
+	}
+	
+	// Log warnings for clusters not found
+	for _, allowed := range allowedClusters {
+		if !matchedClusters[allowed] {
+			logger.Warn("Specified cluster not found in Rancher", zap.String("cluster", allowed))
+		}
+	}
+	
+	if len(filteredClusters) == 0 {
+		logger.Warn("No clusters matched the specified filter, no clusters will be updated")
+	} else {
+		logger.Info("Filtering clusters based on --cluster flag", 
+			zap.Int("matched", len(filteredClusters)), 
+			zap.Int("total", len(clusters)))
+	}
+	
+	return filteredClusters
 }
