@@ -29,11 +29,11 @@ func TestExpandPath(t *testing.T) {
 		wantErr bool
 	}{
 		{"tilde only", "~", userHomeDir, false},
-		{"tilde with slash", "~/.kube/config", userHomeDir + "/.kube/config", false},
+		{"tilde with slash", "~/.kube/config", filepath.FromSlash(userHomeDir + "/.kube/config"), false},
 		{"tilde with backslash", "~\\.kube\\config", userHomeDir + pathSeparator + ".kube" + pathSeparator + "config", false},
-		{"absolute path unix", "/home/user/.kube/config", "/home/user/.kube/config", false},
+		{"absolute path unix", "/home/user/.kube/config", filepath.FromSlash("/home/user/.kube/config"), false},
 		{"absolute path windows", "C:\\Users\\user\\.kube\\config", "C:\\Users\\user\\.kube\\config", false},
-		{"relative path", ".kube/config", ".kube/config", false},
+		{"relative path", ".kube/config", filepath.FromSlash(".kube/config"), false},
 		{"empty path", "", defaultPath, false},
 	}
 
@@ -961,7 +961,7 @@ func TestSaveKubeconfig_WithLogger(t *testing.T) {
 	// Save again with a logger to trigger backup
 	updatedConfig := createTestKubeconfig()
 	updatedConfig.AuthInfos["test-cluster"].Token = "updated-token"
-	
+
 	// Create a logger to verify the backup path is logged
 	logger := createTestLogger()
 	if err := SaveKubeconfig(updatedConfig, testFile, logger); err != nil {
