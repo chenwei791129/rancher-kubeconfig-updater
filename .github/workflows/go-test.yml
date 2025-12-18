@@ -4,6 +4,10 @@ on:
   push:
     branches-ignore:
       - main
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
 
 jobs:
   test:
