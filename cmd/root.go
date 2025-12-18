@@ -110,7 +110,7 @@ func run(cmd *cobra.Command, args []string) {
 		logger.Info("Successfully updated kubeconfig token for cluster: " + v.Name)
 	}
 
-	err = kubeconfig.SaveKubeconfig(kubecfg, kubeconfigPath)
+	err = kubeconfig.SaveKubeconfig(kubecfg, kubeconfigPath, logger)
 	if err != nil {
 		logger.Error("Failed to save kubeconfig file", zap.Error(err))
 		return

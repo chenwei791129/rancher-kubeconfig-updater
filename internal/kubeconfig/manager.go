@@ -79,7 +79,7 @@ func UpdateTokenByName(c *api.Config, clusterID, clusterName, token, rancherURL 
 	return fmt.Errorf("user %s not found in kubeconfig", clusterName)
 }
 
-func SaveKubeconfig(c *api.Config, path string) error {
+func SaveKubeconfig(c *api.Config, path string, logger *zap.Logger) error {
 	// 1. Expand path
 	expandedPath, err := expandPath(path)
 	if err != nil {
@@ -93,8 +93,14 @@ func SaveKubeconfig(c *api.Config, path string) error {
 	}
 
 	// 3. Create backup if file exists (fail if backup fails)
-	if err := createBackup(expandedPath); err != nil {
+	backupPath, err := createBackup(expandedPath)
+	if err != nil {
 		return fmt.Errorf("failed to create backup: %w", err)
+	}
+
+	// Log backup path if a backup was created
+	if backupPath != "" && logger != nil {
+		logger.Info("Created backup of kubeconfig file: " + backupPath)
 	}
 
 	// 4. Write kubeconfig using client-go
