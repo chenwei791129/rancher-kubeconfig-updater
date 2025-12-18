@@ -149,8 +149,14 @@ func filterClusters(clusters rancher.Clusters, clusterFilter string, logger *zap
 	// Filter clusters
 	filteredClusters := make(rancher.Clusters, 0)
 	matchedClusters := make(map[string]bool)
+	addedClusterIDs := make(map[string]bool)
 	
 	for _, cluster := range clusters {
+		// Skip if this cluster was already added
+		if addedClusterIDs[cluster.ID] {
+			continue
+		}
+		
 		// Check if cluster name or ID matches any of the allowed clusters (case-insensitive)
 		clusterNameLower := strings.ToLower(cluster.Name)
 		clusterIDLower := strings.ToLower(cluster.ID)
@@ -159,6 +165,7 @@ func filterClusters(clusters rancher.Clusters, clusterFilter string, logger *zap
 			if clusterNameLower == allowed || clusterIDLower == allowed {
 				filteredClusters = append(filteredClusters, cluster)
 				matchedClusters[allowed] = true
+				addedClusterIDs[cluster.ID] = true
 				break
 			}
 		}

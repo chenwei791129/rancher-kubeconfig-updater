@@ -187,3 +187,20 @@ func TestFilterClusters_DuplicateInFilter(t *testing.T) {
 	assert.Len(t, filtered, 1)
 	assert.Equal(t, "production", filtered[0].Name)
 }
+
+// TestFilterClusters_BothNameAndIDMatch tests when both name and ID of a cluster are in the filter
+func TestFilterClusters_BothNameAndIDMatch(t *testing.T) {
+	logger := zap.NewNop()
+	clusters := rancher.Clusters{
+		{ID: "c-m-12345", Name: "production"},
+		{ID: "c-m-67890", Name: "staging"},
+	}
+
+	// Filter contains both the cluster name and ID
+	filtered := filterClusters(clusters, "production,c-m-12345", logger)
+
+	// Should only return the cluster once, not twice
+	assert.Len(t, filtered, 1)
+	assert.Equal(t, "production", filtered[0].Name)
+	assert.Equal(t, "c-m-12345", filtered[0].ID)
+}
