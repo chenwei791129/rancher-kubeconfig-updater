@@ -129,19 +129,19 @@ func run(cmd *cobra.Command, args []string) {
 
 // filterClusters filters clusters based on comma-separated cluster names or IDs
 func filterClusters(clusters rancher.Clusters, clusterFilter string, logger *zap.Logger) rancher.Clusters {
-	// Parse comma-separated cluster names/IDs and create a map for O(1) lookup
+	// Parse comma-separated cluster names/IDs and create a set for O(1) lookup
 	allowedClustersRaw := strings.Split(clusterFilter, ",")
-	allowedClustersMap := make(map[string]bool)
+	allowedClustersSet := make(map[string]bool)
 	
 	// Trim whitespace and convert to lowercase for case-insensitive matching
 	for _, c := range allowedClustersRaw {
 		trimmed := strings.TrimSpace(c)
 		if trimmed != "" {
-			allowedClustersMap[strings.ToLower(trimmed)] = false
+			allowedClustersSet[strings.ToLower(trimmed)] = true
 		}
 	}
 	
-	if len(allowedClustersMap) == 0 {
+	if len(allowedClustersSet) == 0 {
 		logger.Warn("--cluster flag specified but no valid cluster names provided, processing all clusters")
 		return clusters
 	}
@@ -149,6 +149,7 @@ func filterClusters(clusters rancher.Clusters, clusterFilter string, logger *zap
 	// Filter clusters
 	filteredClusters := make(rancher.Clusters, 0)
 	addedClusterIDs := make(map[string]bool)
+	matchedFilters := make(map[string]bool)
 	
 	for _, cluster := range clusters {
 		// Skip if this cluster was already added
@@ -160,20 +161,23 @@ func filterClusters(clusters rancher.Clusters, clusterFilter string, logger *zap
 		clusterNameLower := strings.ToLower(cluster.Name)
 		clusterIDLower := strings.ToLower(cluster.ID)
 		
-		if _, nameMatch := allowedClustersMap[clusterNameLower]; nameMatch {
+		var matchedFilter string
+		if allowedClustersSet[clusterNameLower] {
+			matchedFilter = clusterNameLower
+		} else if allowedClustersSet[clusterIDLower] {
+			matchedFilter = clusterIDLower
+		}
+		
+		if matchedFilter != "" {
 			filteredClusters = append(filteredClusters, cluster)
-			allowedClustersMap[clusterNameLower] = true
-			addedClusterIDs[cluster.ID] = true
-		} else if _, idMatch := allowedClustersMap[clusterIDLower]; idMatch {
-			filteredClusters = append(filteredClusters, cluster)
-			allowedClustersMap[clusterIDLower] = true
+			matchedFilters[matchedFilter] = true
 			addedClusterIDs[cluster.ID] = true
 		}
 	}
 	
 	// Log warnings for clusters not found
-	for allowed, matched := range allowedClustersMap {
-		if !matched {
+	for allowed := range allowedClustersSet {
+		if !matchedFilters[allowed] {
 			logger.Warn("Specified cluster not found in Rancher", zap.String("cluster", allowed))
 		}
 	}
