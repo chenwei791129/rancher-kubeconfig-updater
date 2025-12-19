@@ -1,7 +1,6 @@
 package config
 
 import (
-	"os"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -27,8 +26,7 @@ func TestGetBool_EnvVarTrue(t *testing.T) {
 	cmd.Flags().Bool("test-flag", false, "test flag")
 
 	// Set environment variable
-	os.Setenv("TEST_ENV", "true")
-	defer os.Unsetenv("TEST_ENV")
+	t.Setenv("TEST_ENV", "true")
 
 	result := GetBool(cmd, "test-flag", "TEST_ENV")
 	assert.True(t, result)
@@ -40,8 +38,7 @@ func TestGetBool_EnvVar1(t *testing.T) {
 	cmd.Flags().Bool("test-flag", false, "test flag")
 
 	// Set environment variable to "1"
-	os.Setenv("TEST_ENV", "1")
-	defer os.Unsetenv("TEST_ENV")
+	t.Setenv("TEST_ENV", "1")
 
 	result := GetBool(cmd, "test-flag", "TEST_ENV")
 	assert.True(t, result)
@@ -53,8 +50,7 @@ func TestGetBool_EnvVarFalse(t *testing.T) {
 	cmd.Flags().Bool("test-flag", false, "test flag")
 
 	// Set environment variable to "false"
-	os.Setenv("TEST_ENV", "false")
-	defer os.Unsetenv("TEST_ENV")
+	t.Setenv("TEST_ENV", "false")
 
 	result := GetBool(cmd, "test-flag", "TEST_ENV")
 	assert.False(t, result)
@@ -65,8 +61,8 @@ func TestGetBool_EnvVarEmpty(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.Flags().Bool("test-flag", false, "test flag")
 
-	// Ensure environment variable is not set
-	os.Unsetenv("TEST_ENV")
+	// Ensure environment variable is not set (empty string)
+	t.Setenv("TEST_ENV", "")
 
 	result := GetBool(cmd, "test-flag", "TEST_ENV")
 	assert.False(t, result)
@@ -78,8 +74,7 @@ func TestGetBool_FlagOverridesEnv(t *testing.T) {
 	cmd.Flags().Bool("test-flag", false, "test flag")
 
 	// Set environment variable to true
-	os.Setenv("TEST_ENV", "true")
-	defer os.Unsetenv("TEST_ENV")
+	t.Setenv("TEST_ENV", "true")
 
 	// Set flag to false
 	err := cmd.Flags().Set("test-flag", "false")

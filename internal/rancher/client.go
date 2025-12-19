@@ -48,7 +48,7 @@ func WithHTTPClient(client HTTPClient) ClientOption {
 }
 
 func NewClient(baseurl, username, password string, authType AuthType, logger *zap.Logger, insecureSkipVerify bool, opts ...ClientOption) (*Client, error) {
-	// 預設使用標準 HTTP client with TLS configuration
+	// Create HTTP client with TLS configuration
 	transport := createTransport(insecureSkipVerify)
 	client := &Client{
 		httpClient: &http.Client{Transport: transport},
@@ -63,12 +63,15 @@ func NewClient(baseurl, username, password string, authType AuthType, logger *za
 		logger.Warn("⚠️  Your connection may be vulnerable to man-in-the-middle attacks.")
 	}
 
-	// 套用選項（可注入 mock client）
+	// Apply client options (allows injecting mock client for testing)
+	// Note: If WithHTTPClient is used, it will override the transport configuration above.
+	// This is intentional for testing purposes where custom HTTP clients (e.g., httptest.Server.Client())
+	// need to be injected. In production, WithHTTPClient should not be used.
 	for _, opt := range opts {
 		opt(client)
 	}
 
-	// 取得 token
+	// Obtain authentication token
 	token, err := getRancherToken(baseurl, username, password, authType, client.httpClient)
 	if err != nil {
 		return nil, err
