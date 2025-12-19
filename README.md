@@ -12,6 +12,7 @@ A command-line tool to update kubeconfig tokens for Rancher-managed Kubernetes c
 - Update kubeconfig tokens for all Rancher-managed clusters
 - Auto-create kubeconfig entries for new clusters (optional)
 - Backup kubeconfig before modifications
+- Skip TLS certificate verification for development/testing environments with self-signed certificates
 
 ## Installation
 
@@ -70,6 +71,9 @@ RANCHER_USERNAME=your-username
 
 # Auth type, defaults to "local", can be "ldap" or "local"
 RANCHER_AUTH_TYPE=local
+
+# Optional: Skip TLS certificate verification (see Security Considerations below)
+# RANCHER_INSECURE_SKIP_TLS_VERIFY=false
 ```
 
 **Steps:**
@@ -184,12 +188,13 @@ Use LDAP authentication:
 
 ```
 Flags:
-      --auth-type string        Authentication type: 'local' or 'ldap' (default: from RANCHER_AUTH_TYPE env or 'local')
-  -a, --auto-create             Automatically create kubeconfig entries for clusters not found in the config
-      --cluster string          Comma-separated list of cluster names or IDs to update
-  -h, --help                    help for rancher-kubeconfig-updater
-  -p, --password string[="-"]   Rancher Password
-  -u, --user string             Rancher Username
+      --auth-type string           Authentication type: 'local' or 'ldap' (default: from RANCHER_AUTH_TYPE env or 'local')
+  -a, --auto-create                Automatically create kubeconfig entries for clusters not found in the config
+      --cluster string             Comma-separated list of cluster names or IDs to update
+  -h, --help                       help for rancher-kubeconfig-updater
+      --insecure-skip-tls-verify   Skip TLS certificate verification (insecure, use only for development/testing)
+  -p, --password string[="-"]      Rancher Password
+  -u, --user string                Rancher Username
 ```
 
 ### Flag Details
@@ -235,7 +240,58 @@ Flags:
   > - The tool will log a warning if a specified cluster is not found
   > - Whitespace around cluster names is automatically trimmed
 
+- **`--insecure-skip-tls-verify`**: Skip TLS certificate verification (see [TLS Certificate Verification](#tls-certificate-verification) section for details)
+
 **Note**: Command line flags take precedence over environment variables.
+
+## TLS Certificate Verification
+
+By default, the tool verifies TLS certificates when connecting to the Rancher API. However, in certain environments (development, testing, or internal networks), you may need to skip this verification.
+
+### When to Use This Option
+
+✅ **Appropriate Use Cases:**
+- Development environments with self-signed certificates
+- Testing servers with internal CA certificates
+- POC/Demo environments for quick setup
+- Internal networks with custom certificate authorities
+
+❌ **NOT Recommended For:**
+- Production environments
+- Public-facing Rancher instances
+- Environments where security is critical
+
+### How to Enable
+
+**Option 1: Command-Line Flag**
+```bash
+./rancher-kubeconfig-updater --insecure-skip-tls-verify -p
+```
+
+**Option 2: Environment Variable**
+```bash
+export RANCHER_INSECURE_SKIP_TLS_VERIFY=true
+./rancher-kubeconfig-updater -p
+```
+
+**Option 3: `.env` File**
+```bash
+# Add to your .env file
+RANCHER_INSECURE_SKIP_TLS_VERIFY=true
+```
+
+### Security Warning
+
+When TLS verification is disabled, the tool will display prominent warning messages:
+
+```
+⚠️  WARNING: TLS certificate verification is disabled!
+⚠️  This is insecure and should only be used in development/test environments.
+⚠️  Your connection may be vulnerable to man-in-the-middle attacks.
+```
+
+> [!CAUTION]
+> **Security Risk**: Disabling TLS verification makes your connection vulnerable to man-in-the-middle attacks. Only use this option in trusted, isolated networks where security risks are acceptable.
 
 ## License
 

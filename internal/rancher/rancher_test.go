@@ -116,6 +116,7 @@ func TestNewClient_WithHTTPTest(t *testing.T) {
 		"testpass",
 		AuthTypeLocal,
 		logger,
+		false,                           // insecureSkipVerify
 		WithHTTPClient(server.Client()), // Inject test HTTP client
 	)
 
@@ -245,4 +246,62 @@ func TestGetRancherToken_InvalidAuthType(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid auth type")
 	assert.Empty(t, token)
+}
+
+// TestCreateTransport_InsecureSkipVerify tests transport TLS configuration
+func TestCreateTransport_InsecureSkipVerify(t *testing.T) {
+	tests := []struct {
+		name               string
+		insecureSkipVerify bool
+	}{
+		{"TLS verification enabled", false},
+		{"TLS verification disabled", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			transport := createTransport(tt.insecureSkipVerify)
+
+			assert.NotNil(t, transport)
+			assert.NotNil(t, transport.TLSClientConfig)
+			assert.Equal(t, tt.insecureSkipVerify, transport.TLSClientConfig.InsecureSkipVerify)
+		})
+	}
+}
+
+// TestNewClient_InsecureSkipVerify tests that insecure flag is properly set
+func TestNewClient_InsecureSkipVerify(t *testing.T) {
+	tests := []struct {
+		name               string
+		insecureSkipVerify bool
+	}{
+		{"with insecure skip verify enabled", true},
+		{"with insecure skip verify disabled", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusCreated)
+				_, _ = w.Write([]byte(`{"token": "test-token"}`))
+			}))
+			defer server.Close()
+
+			logger := zap.NewNop()
+
+			client, err := NewClient(
+				server.URL,
+				"testuser",
+				"testpass",
+				AuthTypeLocal,
+				logger,
+				tt.insecureSkipVerify,
+				WithHTTPClient(server.Client()),
+			)
+
+			assert.NoError(t, err)
+			assert.NotNil(t, client)
+			assert.Equal(t, "test-token", client.token)
+		})
+	}
 }

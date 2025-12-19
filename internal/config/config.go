@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -35,4 +36,22 @@ func GetPassword(cmd *cobra.Command, flagName, envKey string) (string, error) {
 		return val, nil
 	}
 	return os.Getenv(envKey), nil
+}
+
+// GetBool returns the value of a boolean flag if it was set, otherwise returns the value from the environment variable.
+func GetBool(cmd *cobra.Command, flagName, envKey string) bool {
+	if cmd.Flags().Changed(flagName) {
+		val, _ := cmd.Flags().GetBool(flagName)
+		return val
+	}
+	// Check environment variable (case-insensitive)
+	envVal := os.Getenv(envKey)
+	if envVal == "" {
+		return false
+	}
+	boolVal, err := strconv.ParseBool(envVal)
+	if err != nil {
+		return false
+	}
+	return boolVal
 }
