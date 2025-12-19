@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.3.0...v1.4.0) (2025-12-19)
+
+
+### Features
+
+* add --cluster flag for selective cluster token updates ([#46](https://github.com/chenwei791129/rancher-kubeconfig-updater/issues/46)) ([65429c6](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/65429c6ee23c1660511d6b0a9a93b5062a748ad2))
+
 ## [1.3.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.2.1...v1.3.0) (2025-12-18)
 
 
