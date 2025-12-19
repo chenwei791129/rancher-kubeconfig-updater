@@ -16,14 +16,10 @@ type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-var (
-	insecure = false
-	tr       *http.Transport
-)
-
-func init() {
-	tr = &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: insecure},
+// createTransport creates an HTTP transport with the specified TLS configuration
+func createTransport(insecureSkipVerify bool) *http.Transport {
+	return &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: insecureSkipVerify},
 	}
 }
 
@@ -51,12 +47,20 @@ func WithHTTPClient(client HTTPClient) ClientOption {
 	}
 }
 
-func NewClient(baseurl, username, password string, authType AuthType, logger *zap.Logger, opts ...ClientOption) (*Client, error) {
-	// 預設使用標準 HTTP client
+func NewClient(baseurl, username, password string, authType AuthType, logger *zap.Logger, insecureSkipVerify bool, opts ...ClientOption) (*Client, error) {
+	// 預設使用標準 HTTP client with TLS configuration
+	transport := createTransport(insecureSkipVerify)
 	client := &Client{
-		httpClient: &http.Client{Transport: tr},
+		httpClient: &http.Client{Transport: transport},
 		BaseURL:    baseurl,
 		logger:     logger,
+	}
+
+	// Log warning if TLS verification is disabled
+	if insecureSkipVerify {
+		logger.Warn("⚠️  WARNING: TLS certificate verification is disabled!")
+		logger.Warn("⚠️  This is insecure and should only be used in development/test environments.")
+		logger.Warn("⚠️  Your connection may be vulnerable to man-in-the-middle attacks.")
 	}
 
 	// 套用選項（可注入 mock client）

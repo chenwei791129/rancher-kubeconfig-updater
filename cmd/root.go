@@ -13,11 +13,12 @@ import (
 )
 
 var (
-	autoCreate   bool
-	authTypeFlag string
-	userFlag     string
-	passwordFlag string
-	clusterFlag  string
+	autoCreate            bool
+	authTypeFlag          string
+	userFlag              string
+	passwordFlag          string
+	clusterFlag           string
+	insecureSkipTLSVerify bool
 )
 
 func NewRootCmd() *cobra.Command {
@@ -34,6 +35,7 @@ func NewRootCmd() *cobra.Command {
 	// Set NoOptDefVal for password to allow interactive prompt when flag is present without value
 	rootCmd.Flags().Lookup("password").NoOptDefVal = "-"
 	rootCmd.Flags().StringVar(&clusterFlag, "cluster", "", "Comma-separated list of cluster names or IDs to update")
+	rootCmd.Flags().BoolVar(&insecureSkipTLSVerify, "insecure-skip-tls-verify", false, "Skip TLS certificate verification (insecure, use only for development/testing)")
 
 	return rootCmd
 }
@@ -59,6 +61,7 @@ func run(cmd *cobra.Command, args []string) {
 	rancherURL := os.Getenv("RANCHER_URL")
 	rancherUsername := config.GetConfig(cmd, "user", "RANCHER_USERNAME")
 	rancherAuthType := config.GetConfig(cmd, "auth-type", "RANCHER_AUTH_TYPE")
+	insecureSkipTLSVerify := config.GetBool(cmd, "insecure-skip-tls-verify", "RANCHER_INSECURE_SKIP_TLS_VERIFY")
 
 	rancherPassword, err := config.GetPassword(cmd, "password", "RANCHER_PASSWORD")
 	if err != nil {
@@ -91,7 +94,7 @@ func run(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	client, err := rancher.NewClient(rancherURL, rancherUsername, rancherPassword, authType, logger)
+	client, err := rancher.NewClient(rancherURL, rancherUsername, rancherPassword, authType, logger, insecureSkipTLSVerify)
 	if err != nil {
 		logger.Error("Failed to authenticate with Rancher", zap.Error(err))
 		return

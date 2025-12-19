@@ -116,6 +116,7 @@ func TestNewClient_WithHTTPTest(t *testing.T) {
 		"testpass",
 		AuthTypeLocal,
 		logger,
+		false, // insecureSkipVerify
 		WithHTTPClient(server.Client()), // Inject test HTTP client
 	)
 
@@ -245,4 +246,43 @@ func TestGetRancherToken_InvalidAuthType(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid auth type")
 	assert.Empty(t, token)
+}
+
+// TestNewClient_InsecureSkipVerify tests that insecure flag is properly set
+func TestNewClient_InsecureSkipVerify(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"token": "test-token"}`))
+	}))
+	defer server.Close()
+
+	logger := zap.NewNop()
+
+	// Test with insecure = true
+	client, err := NewClient(
+		server.URL,
+		"testuser",
+		"testpass",
+		AuthTypeLocal,
+		logger,
+		true, // insecureSkipVerify
+		WithHTTPClient(server.Client()),
+	)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, client)
+
+	// Test with insecure = false
+	client2, err := NewClient(
+		server.URL,
+		"testuser",
+		"testpass",
+		AuthTypeLocal,
+		logger,
+		false, // insecureSkipVerify
+		WithHTTPClient(server.Client()),
+	)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, client2)
 }

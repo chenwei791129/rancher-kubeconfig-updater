@@ -36,3 +36,14 @@ func GetPassword(cmd *cobra.Command, flagName, envKey string) (string, error) {
 	}
 	return os.Getenv(envKey), nil
 }
+
+// GetBool returns the value of a boolean flag if it was set, otherwise returns the value from the environment variable.
+func GetBool(cmd *cobra.Command, flagName, envKey string) bool {
+	if cmd.Flags().Changed(flagName) {
+		val, _ := cmd.Flags().GetBool(flagName)
+		return val
+	}
+	// Check environment variable
+	envVal := os.Getenv(envKey)
+	return envVal == "true" || envVal == "1"
+}
