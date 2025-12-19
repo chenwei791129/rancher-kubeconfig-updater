@@ -1155,10 +1155,16 @@ func TestSaveKubeconfig_WithKUBECONFIG_MultipleFiles_NoneExist(t *testing.T) {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
 	
-	// ClientConfigLoadingRules.GetDefaultFilename() returns the first file when none exist
-	// This is the actual behavior of client-go, even though kubectl's PathOptions may differ
+	// Note: ClientConfigLoadingRules.GetDefaultFilename() returns the first file when none exist.
+	// This differs from kubectl's PathOptions.GetDefaultFilename() which returns the last file.
+	// We use ClientConfigLoadingRules because:
+	// 1. It's the core client-go API that handles all file loading/precedence logic
+	// 2. It ensures consistency with other client-go based tools
+	// 3. For the primary use case (single file in KUBECONFIG), both behave identically
+	// 4. When multiple files exist, the behavior is the same (uses first existing file)
+	// The difference only affects the edge case of multiple non-existent files in KUBECONFIG.
 	if _, err := os.Stat(file1); os.IsNotExist(err) {
-		t.Error("First file should be created when no files exist (client-go behavior)")
+		t.Error("First file should be created when no files exist (client-go ClientConfigLoadingRules behavior)")
 	}
 }
 

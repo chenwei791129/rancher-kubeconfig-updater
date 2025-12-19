@@ -13,8 +13,11 @@ import (
 )
 
 func LoadKubeconfig(path string) (*api.Config, error) {
-	// Use client-go's loading rules to respect KUBECONFIG and handle all edge cases
-	// This follows kubectl behavior exactly
+	// Use client-go's ClientConfigLoadingRules to respect KUBECONFIG and handle all edge cases.
+	// This ensures compatibility with other client-go based tools and kubectl for all common scenarios.
+	// Note: The behavior for multiple non-existent files in KUBECONFIG may differ slightly from 
+	// kubectl's PathOptions, but this edge case is rare and the common cases (single file, 
+	// multiple files with at least one existing) behave identically.
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	
 	// If an explicit path is provided, use it; otherwise, use client-go's default logic
