@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -43,7 +44,14 @@ func GetBool(cmd *cobra.Command, flagName, envKey string) bool {
 		val, _ := cmd.Flags().GetBool(flagName)
 		return val
 	}
-	// Check environment variable
+	// Check environment variable (case-insensitive)
 	envVal := os.Getenv(envKey)
-	return envVal == "true" || envVal == "1"
+	if envVal == "" {
+		return false
+	}
+	boolVal, err := strconv.ParseBool(envVal)
+	if err != nil {
+		return false
+	}
+	return boolVal
 }
