@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.4.0...v1.5.0) (2025-12-19)
+
+
+### Features
+
+* add --insecure-skip-tls-verify flag ([#53](https://github.com/chenwei791129/rancher-kubeconfig-updater/issues/53)) ([93489c7](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/93489c79ec9cc929afd5c9d78105f83de8ae7cd6))
+
 ## [1.4.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.3.0...v1.4.0) (2025-12-19)
 
 
