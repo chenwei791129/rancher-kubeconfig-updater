@@ -36,9 +36,29 @@ Run with coverage:
 - ✅ Supports test filtering and targeting
 - ✅ Real-time test status updates
 
-### 2. **Fallback: Terminal Execution**
+### 2. **Secondary: Use `run_in_terminal` Tool**
 
-**Only use terminal commands when IDE tools are unavailable or insufficient:**
+**If the `runTests` tool is not available or disabled, use the `run_in_terminal` tool:**
+
+- This tool executes commands in a persistent terminal session
+- Works in Windows PowerShell 5.1 environment
+- Supports both foreground and background execution
+
+**Example usage:**
+```
+run_in_terminal with command="go test -v ./..."
+run_in_terminal with command="go test -cover ./..."
+run_in_terminal with command="go test -v -run TestFunctionName ./path/to/package"
+```
+
+**Note:** When using `run_in_terminal`, remember:
+- Set `isBackground=false` for test commands to see the output
+- Use proper Go test flags for desired output format
+- Commands execute in PowerShell context
+
+### 3. **Last Resort: Manual Terminal Execution**
+
+**Only provide terminal commands for manual execution when both tools above are unavailable:**
 
 ```bash
 # Run all tests
@@ -83,7 +103,26 @@ go tool cover -html=coverage.out
 |----------|------------------|
 | Development (quick feedback) | IDE `runTests` tool |
 | Debugging specific tests | IDE `runTests` tool |
+| `runTests` tool unavailable | `run_in_terminal` tool |
 | CI/CD pipeline | Terminal `go test` |
 | Coverage analysis | IDE `runTests` with coverage mode |
 | Running all tests locally | Either (IDE preferred) |
 | Testing specific packages | IDE `runTests` tool |
+
+## Tool Availability Fallback Chain
+
+```
+┌─────────────────────────────┐
+│  1. runTests (IDE tool)     │  ← Try this first
+└──────────────┬──────────────┘
+               │ If unavailable
+               ▼
+┌─────────────────────────────┐
+│  2. run_in_terminal tool    │  ← Fallback option
+└──────────────┬──────────────┘
+               │ If unavailable
+               ▼
+┌─────────────────────────────┐
+│  3. Provide manual commands │  ← Last resort
+└─────────────────────────────┘
+```
