@@ -6,7 +6,7 @@ setup:
 
 .PHONY: test
 test:
-	go test -cover ./...
+	go test -race -cover ./...
 
 .PHONY: lint
 lint:
