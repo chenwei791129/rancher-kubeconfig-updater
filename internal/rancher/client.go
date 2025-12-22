@@ -1,3 +1,4 @@
+// Package rancher provides client functionality for interacting with Rancher API.
 package rancher
 
 import (
