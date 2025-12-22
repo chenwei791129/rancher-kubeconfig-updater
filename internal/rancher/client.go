@@ -84,7 +84,6 @@ func NewClient(baseurl, username, password string, authType AuthType, logger *za
 	return client, nil
 }
 
-// GET /v3/clusters
 func (c *Client) ListClusters() (Clusters, error) {
 	var clusters Clusters
 	type getClustersResponse struct {
