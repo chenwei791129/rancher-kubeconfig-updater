@@ -15,8 +15,8 @@ const (
 )
 
 const (
-	LDAP_LOGIN_URL  = "/v3-public/openLdapProviders/openldap?action=login"
-	LOCAL_LOGIN_URL = "/v3-public/localProviders/local?action=login"
+	LDAPLoginURL  = "/v3-public/openLdapProviders/openldap?action=login"
+	LocalLoginURL = "/v3-public/localProviders/local?action=login"
 )
 
 // getRancherToken authenticates with Rancher and returns an API token
@@ -41,9 +41,9 @@ func getRancherToken(baseurl, username, password string, authType AuthType, http
 	var loginURL string
 	switch authType {
 	case AuthTypeLDAP:
-		loginURL = LDAP_LOGIN_URL
+		loginURL = LDAPLoginURL
 	case AuthTypeLocal:
-		loginURL = LOCAL_LOGIN_URL
+		loginURL = LocalLoginURL
 	default:
 		return "", fmt.Errorf("invalid auth type: %s", authType)
 	}
