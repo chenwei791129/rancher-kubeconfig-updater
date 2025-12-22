@@ -995,17 +995,15 @@ func TestSaveKubeconfig_WithLogger(t *testing.T) {
 func TestLoadKubeconfig_WithKUBECONFIG_SingleFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	kubeconfigFile := filepath.Join(tmpDir, "my-config")
-	
+
 	// Create a test kubeconfig file
 	content := createTestKubeconfigContent()
 	if err := os.WriteFile(kubeconfigFile, []byte(content), 0600); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
-	
+
 	// Set KUBECONFIG environment variable
-	originalKubeconfig := os.Getenv("KUBECONFIG")
-	defer os.Setenv("KUBECONFIG", originalKubeconfig)
-	os.Setenv("KUBECONFIG", kubeconfigFile)
+	t.Setenv("KUBECONFIG", kubeconfigFile)
 	
 	// Load with empty path (should use KUBECONFIG)
 	config, err := LoadKubeconfig("")
@@ -1037,13 +1035,10 @@ func TestLoadKubeconfig_WithKUBECONFIG_MultipleFiles(t *testing.T) {
 	// According to kubectl behavior, when multiple files are specified:
 	// - For reading: merge all files
 	// - For writing: use first existing file, or last file if none exist
-	
+
 	// Set KUBECONFIG with multiple files (OS-specific path separator)
-	originalKubeconfig := os.Getenv("KUBECONFIG")
-	defer os.Setenv("KUBECONFIG", originalKubeconfig)
-	
 	separator := string(os.PathListSeparator)
-	os.Setenv("KUBECONFIG", file1+separator+file2)
+	t.Setenv("KUBECONFIG", file1+separator+file2)
 	
 	// Load with empty path (should use first file from KUBECONFIG)
 	config, err := LoadKubeconfig("")
@@ -1061,11 +1056,9 @@ func TestLoadKubeconfig_WithKUBECONFIG_MultipleFiles(t *testing.T) {
 func TestSaveKubeconfig_WithKUBECONFIG_SingleFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	kubeconfigFile := filepath.Join(tmpDir, "my-config")
-	
+
 	// Set KUBECONFIG environment variable
-	originalKubeconfig := os.Getenv("KUBECONFIG")
-	defer os.Setenv("KUBECONFIG", originalKubeconfig)
-	os.Setenv("KUBECONFIG", kubeconfigFile)
+	t.Setenv("KUBECONFIG", kubeconfigFile)
 	
 	config := createTestKubeconfig()
 	
@@ -1100,13 +1093,10 @@ func TestSaveKubeconfig_WithKUBECONFIG_MultipleFiles_FirstExists(t *testing.T) {
 	if err := os.WriteFile(file1, []byte(createTestKubeconfigContent()), 0600); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
-	
+
 	// Set KUBECONFIG with multiple files
-	originalKubeconfig := os.Getenv("KUBECONFIG")
-	defer os.Setenv("KUBECONFIG", originalKubeconfig)
-	
 	separator := string(os.PathListSeparator)
-	os.Setenv("KUBECONFIG", file1+separator+file2)
+	t.Setenv("KUBECONFIG", file1+separator+file2)
 	
 	config := createTestKubeconfig()
 	config.AuthInfos["test-cluster"].Token = "new-token"
@@ -1139,13 +1129,10 @@ func TestSaveKubeconfig_WithKUBECONFIG_MultipleFiles_NoneExist(t *testing.T) {
 	file2 := filepath.Join(tmpDir, "config2")
 	
 	// Neither file exists yet
-	
+
 	// Set KUBECONFIG with multiple files
-	originalKubeconfig := os.Getenv("KUBECONFIG")
-	defer os.Setenv("KUBECONFIG", originalKubeconfig)
-	
 	separator := string(os.PathListSeparator)
-	os.Setenv("KUBECONFIG", file1+separator+file2)
+	t.Setenv("KUBECONFIG", file1+separator+file2)
 	
 	config := createTestKubeconfig()
 	
@@ -1165,6 +1152,11 @@ func TestSaveKubeconfig_WithKUBECONFIG_MultipleFiles_NoneExist(t *testing.T) {
 	// The difference only affects the edge case of multiple non-existent files in KUBECONFIG.
 	if _, err := os.Stat(file1); os.IsNotExist(err) {
 		t.Error("First file should be created when no files exist (client-go ClientConfigLoadingRules behavior)")
+	}
+
+	// Verify second file was not created (differs from kubectl PathOptions)
+	if _, err := os.Stat(file2); !os.IsNotExist(err) {
+		t.Error("Second file should not be created (client-go uses first file, not last)")
 	}
 }
 
@@ -1186,11 +1178,9 @@ func TestLoadKubeconfig_ExplicitPathOverridesKUBECONFIG(t *testing.T) {
 	if err := SaveKubeconfig(config2, explicitFile, nil); err != nil {
 		t.Fatalf("Failed to create explicit config: %v", err)
 	}
-	
+
 	// Set KUBECONFIG environment variable
-	originalKubeconfig := os.Getenv("KUBECONFIG")
-	defer os.Setenv("KUBECONFIG", originalKubeconfig)
-	os.Setenv("KUBECONFIG", kubeconfigFile)
+	t.Setenv("KUBECONFIG", kubeconfigFile)
 	
 	// Load with explicit path (should ignore KUBECONFIG)
 	config, err := LoadKubeconfig(explicitFile)
@@ -1209,11 +1199,9 @@ func TestSaveKubeconfig_ExplicitPathOverridesKUBECONFIG(t *testing.T) {
 	tmpDir := t.TempDir()
 	kubeconfigFile := filepath.Join(tmpDir, "env-config")
 	explicitFile := filepath.Join(tmpDir, "explicit-config")
-	
+
 	// Set KUBECONFIG environment variable
-	originalKubeconfig := os.Getenv("KUBECONFIG")
-	defer os.Setenv("KUBECONFIG", originalKubeconfig)
-	os.Setenv("KUBECONFIG", kubeconfigFile)
+	t.Setenv("KUBECONFIG", kubeconfigFile)
 	
 	config := createTestKubeconfig()
 	
@@ -1237,16 +1225,39 @@ func TestSaveKubeconfig_ExplicitPathOverridesKUBECONFIG(t *testing.T) {
 // TestLoadKubeconfig_NoKUBECONFIG_UsesDefault tests default behavior when KUBECONFIG is not set
 func TestLoadKubeconfig_NoKUBECONFIG_UsesDefault(t *testing.T) {
 	// Unset KUBECONFIG
-	originalKubeconfig := os.Getenv("KUBECONFIG")
-	defer os.Setenv("KUBECONFIG", originalKubeconfig)
-	os.Unsetenv("KUBECONFIG")
-	
+	if err := os.Unsetenv("KUBECONFIG"); err != nil {
+		t.Fatalf("Failed to unset KUBECONFIG: %v", err)
+	}
+	t.Cleanup(func() {
+		// Restore original value after test
+		if original := os.Getenv("KUBECONFIG"); original != "" {
+			_ = os.Setenv("KUBECONFIG", original)
+		}
+	})
+
 	// Load with empty path (should use default ~/.kube/config)
 	config, err := LoadKubeconfig("")
 	if err != nil {
 		t.Fatalf("LoadKubeconfig() error = %v", err)
 	}
-	
+
+	// Should return empty config if default doesn't exist, or loaded config if it does
+	if config == nil {
+		t.Error("LoadKubeconfig() should return a config structure")
+	}
+}
+
+// TestLoadKubeconfig_EmptyKUBECONFIG_UsesDefault tests default behavior when KUBECONFIG is set to empty string
+func TestLoadKubeconfig_EmptyKUBECONFIG_UsesDefault(t *testing.T) {
+	// Set KUBECONFIG to empty string
+	t.Setenv("KUBECONFIG", "")
+
+	// Load with empty path (should use default ~/.kube/config)
+	config, err := LoadKubeconfig("")
+	if err != nil {
+		t.Fatalf("LoadKubeconfig() error = %v", err)
+	}
+
 	// Should return empty config if default doesn't exist, or loaded config if it does
 	if config == nil {
 		t.Error("LoadKubeconfig() should return a config structure")
