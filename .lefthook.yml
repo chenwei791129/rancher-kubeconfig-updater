@@ -12,7 +12,7 @@ pre-push:
 pre-commit:
   commands:
     golangci-lint:
-      run: golangci-lint run
+      run: go tool golangci-lint run
     cloc:
       only:
         - run: command -v cloc > /dev/null

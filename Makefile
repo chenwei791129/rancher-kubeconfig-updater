@@ -1,7 +1,7 @@
 .PHONY: setup
 setup:
 	go mod download
-	lefthook install
+	go tool lefthook install
 	@echo "✅ Development environment setup complete"
 
 .PHONY: test
@@ -10,7 +10,7 @@ test:
 
 .PHONY: lint
 lint:
-	golangci-lint run
+	go tool golangci-lint run
 
 .PHONY: build
 build:
