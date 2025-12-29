@@ -12,20 +12,45 @@ import (
 	"k8s.io/client-go/tools/clientcmd/api"
 )
 
+// LoadKubeconfig loads a kubeconfig file using the following precedence order:
+//  1. Explicit path parameter (if provided) - highest priority
+//  2. KUBECONFIG environment variable (if set) - respects multiple files
+//  3. Default location: ~/.kube/config - fallback
+//
+// When KUBECONFIG contains multiple files:
+//   - For reading: uses the first existing file
+//   - If no files exist: returns an empty config
+//
+// This implementation uses client-go's ClientConfigLoadingRules to ensure
+// compatibility with kubectl and other Kubernetes tools.
 func LoadKubeconfig(path string) (*api.Config, error) {
-	expandedPath, err := expandPath(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to expand path: %w", err)
+	// Use client-go's ClientConfigLoadingRules to respect KUBECONFIG and handle all edge cases.
+	// This ensures compatibility with other client-go based tools and kubectl for all common scenarios.
+	// Note: The behavior for multiple non-existent files in KUBECONFIG may differ slightly from
+	// kubectl's PathOptions, but this edge case is rare and the common cases (single file,
+	// multiple files with at least one existing) behave identically.
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+
+	// If an explicit path is provided, use it; otherwise, use client-go's default logic
+	if path != "" {
+		expandedPath, err := expandPath(path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to expand path %q: %w", path, err)
+		}
+		loadingRules.ExplicitPath = expandedPath
 	}
+	
+	// Get the actual file path we'll use (respects KUBECONFIG, precedence, etc.)
+	targetPath := loadingRules.GetDefaultFilename()
 
 	// Check if file exists
-	if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
+	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
 		// If file doesn't exist, return a new empty kubeconfig structure
 		return api.NewConfig(), nil
 	}
 
 	// Load kubeconfig using client-go
-	config, err := clientcmd.LoadFromFile(expandedPath)
+	config, err := clientcmd.LoadFromFile(targetPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load kubeconfig file: %w", err)
 	}
@@ -79,21 +104,45 @@ func UpdateTokenByName(c *api.Config, clusterID, clusterName, token, rancherURL 
 	return fmt.Errorf("user %s not found in kubeconfig", clusterName)
 }
 
+// SaveKubeconfig saves a kubeconfig file using the following precedence order:
+//  1. Explicit path parameter (if provided) - highest priority
+//  2. KUBECONFIG environment variable (if set) - handles multiple files
+//  3. Default location: ~/.kube/config - fallback
+//
+// When KUBECONFIG contains multiple files:
+//   - If any file exists: writes to the first existing file
+//   - If no files exist: writes to the first file in the list
+//
+// The file is saved with secure permissions (0600 on Unix systems) and a backup
+// is created if the file already exists.
+//
+// This implementation uses client-go's ClientConfigLoadingRules to ensure
+// compatibility with kubectl and other Kubernetes tools.
 func SaveKubeconfig(c *api.Config, path string, logger *zap.Logger) error {
-	// 1. Expand path
-	expandedPath, err := expandPath(path)
-	if err != nil {
-		return fmt.Errorf("failed to expand path: %w", err)
+	// Use client-go's loading rules to respect KUBECONFIG and handle all edge cases
+	// This follows kubectl behavior exactly for write operations
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+
+	// If an explicit path is provided, use it; otherwise, use client-go's default logic
+	if path != "" {
+		expandedPath, err := expandPath(path)
+		if err != nil {
+			return fmt.Errorf("failed to expand path %q: %w", path, err)
+		}
+		loadingRules.ExplicitPath = expandedPath
 	}
+	
+	// Get the actual file path we'll use (respects KUBECONFIG, precedence, etc.)
+	targetPath := loadingRules.GetDefaultFilename()
 
 	// 2. Ensure directory exists with platform-appropriate permissions
-	dir := filepath.Dir(expandedPath)
+	dir := filepath.Dir(targetPath)
 	if err := os.MkdirAll(dir, getSecureDirMode()); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
 	// 3. Create backup if file exists (fail if backup fails)
-	backupPath, err := createBackup(expandedPath)
+	backupPath, err := createBackup(targetPath)
 	if err != nil {
 		return fmt.Errorf("failed to create backup: %w", err)
 	}
@@ -104,12 +153,12 @@ func SaveKubeconfig(c *api.Config, path string, logger *zap.Logger) error {
 	}
 
 	// 4. Write kubeconfig using client-go
-	if err := clientcmd.WriteToFile(*c, expandedPath); err != nil {
+	if err := clientcmd.WriteToFile(*c, targetPath); err != nil {
 		return fmt.Errorf("failed to write kubeconfig file: %w", err)
 	}
 
 	// 5. Set secure file permissions (client-go might not set them correctly on all platforms)
-	if err := os.Chmod(expandedPath, getSecureFileMode()); err != nil {
+	if err := os.Chmod(targetPath, getSecureFileMode()); err != nil {
 		return fmt.Errorf("failed to set file permissions: %w", err)
 	}
 
