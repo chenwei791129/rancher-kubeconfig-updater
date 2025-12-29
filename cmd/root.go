@@ -183,6 +183,9 @@ func run(cmd *cobra.Command, args []string) {
 		logger.Error("Failed to save kubeconfig file", zap.Error(err))
 		return
 	}
+
+	// Final success message
+	logger.Info("All cluster tokens have been processed successfully")
 }
 
 // filterClusters filters clusters based on comma-separated cluster names or IDs

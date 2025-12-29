@@ -287,7 +287,7 @@ func TestShouldRefreshToken_DifferentThresholds(t *testing.T) {
 		expectedRefresh  bool
 	}{
 		{days: 1, tokenValidDays: 2, expectedRefresh: false},
-		{days: 1, tokenValidDays: 1, expectedRefresh: true},  // At boundary, should refresh
+		{days: 1, tokenValidDays: 1, expectedRefresh: true},  // Boundary: token expires at threshold (should refresh)
 		{days: 7, tokenValidDays: 10, expectedRefresh: false},
 		{days: 7, tokenValidDays: 5, expectedRefresh: true},
 		{days: 30, tokenValidDays: 60, expectedRefresh: false},
@@ -350,7 +350,7 @@ func TestRealWorldRancherToken(t *testing.T) {
 	}
 
 	// Token expires in exactly 30 days, threshold is 30 days
-	// At boundary (or very close), should refresh
+	// At or within threshold, should refresh (using <= comparison)
 	if !shouldRefresh {
 		t.Error("Token expiring in approximately 30 days with 30-day threshold should refresh")
 	}

@@ -87,8 +87,8 @@ func ShouldRefreshToken(token string, thresholdDays int) (bool, error) {
 	// Calculate time until expiration
 	timeUntilExpiry := time.Until(expiresAt)
 
-	// Refresh if expired or expiring within threshold
-	shouldRefresh := timeUntilExpiry < threshold
+	// Refresh if expired or expiring within threshold (inclusive)
+	shouldRefresh := timeUntilExpiry <= threshold
 
 	return shouldRefresh, nil
 }
