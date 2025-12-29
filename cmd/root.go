@@ -185,7 +185,7 @@ func run(cmd *cobra.Command, args []string) {
 	}
 
 	// Final success message
-	logger.Info("All cluster tokens have been processed successfully")
+	logger.Info("Cluster token processing completed successfully")
 }
 
 // filterClusters filters clusters based on comma-separated cluster names or IDs
@@ -275,7 +275,7 @@ func getThresholdDays(cmd *cobra.Command) int {
 	// Check environment variable
 	if envValue := os.Getenv("TOKEN_THRESHOLD_DAYS"); envValue != "" {
 		var days int
-		if _, err := fmt.Sscanf(envValue, "%d", &days); err == nil && days > 0 {
+		if _, err := fmt.Sscanf(envValue, "%d", &days); err == nil && days > 0 && days <= 3650 {
 			return days
 		}
 	}
