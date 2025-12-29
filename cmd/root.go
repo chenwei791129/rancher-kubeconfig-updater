@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"rancher-kubeconfig-updater/internal/config"
 	"rancher-kubeconfig-updater/internal/kubeconfig"
@@ -21,6 +22,8 @@ var (
 	clusterFlag           string
 	insecureSkipTLSVerify bool
 	configPath            string
+	thresholdDays         int
+	forceRefresh          bool
 )
 
 func NewRootCmd() *cobra.Command {
@@ -39,6 +42,8 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.Flags().StringVar(&clusterFlag, "cluster", "", "Comma-separated list of cluster names or IDs to update")
 	rootCmd.Flags().BoolVar(&insecureSkipTLSVerify, "insecure-skip-tls-verify", false, "Skip TLS certificate verification (insecure, use only for development/testing)")
 	rootCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to kubeconfig file (default: ~/.kube/config)")
+	rootCmd.Flags().IntVar(&thresholdDays, "threshold-days", 30, "Token expiration threshold in days (default: 30, can be set via TOKEN_THRESHOLD_DAYS env)")
+	rootCmd.Flags().BoolVar(&forceRefresh, "force-refresh", false, "Force refresh all tokens regardless of expiration")
 
 	return rootCmd
 }
@@ -113,7 +118,46 @@ func run(cmd *cobra.Command, args []string) {
 		clusters = filterClusters(clusters, clusterFlag, logger)
 	}
 
+	// Get threshold days with priority: flag > env > default
+	thresholdDaysValue := getThresholdDays(cmd)
+
+	// Track statistics
+	refreshedCount := 0
+	skippedCount := 0
+
 	for _, v := range clusters {
+		// Check if token refresh is needed (unless force-refresh is enabled)
+		shouldRefresh := forceRefresh
+		var existingToken string
+
+		if !forceRefresh {
+			// Get existing token from kubeconfig
+			if authInfo, exists := kubecfg.AuthInfos[v.Name]; exists && authInfo != nil {
+				existingToken = authInfo.Token
+			}
+
+			// Check if refresh is needed
+			needsRefresh, err := kubeconfig.ShouldRefreshToken(existingToken, thresholdDaysValue)
+			if err != nil {
+				logger.Warn("Failed to check token expiration, will refresh for safety",
+					zap.String("cluster", v.Name),
+					zap.Error(err))
+				shouldRefresh = true
+			} else {
+				shouldRefresh = needsRefresh
+			}
+
+			// Log if skipping refresh
+			if !shouldRefresh {
+				logger.Info("Token still valid, skipping refresh",
+					zap.String("cluster", v.Name))
+				skippedCount++
+				continue
+			}
+		}
+
+		// Refresh token
+		logger.Info("Refreshing token", zap.String("cluster", v.Name))
 		clusterToken := client.GetClusterToken(v.ID)
 		err = kubeconfig.UpdateTokenByName(kubecfg, v.ID, v.Name, clusterToken, rancherURL, autoCreate, logger)
 		if err != nil {
@@ -121,6 +165,17 @@ func run(cmd *cobra.Command, args []string) {
 			continue
 		}
 		logger.Info("Successfully updated kubeconfig token for cluster: " + v.Name)
+		refreshedCount++
+	}
+
+	// Log summary
+	if forceRefresh {
+		logger.Info("Force refresh completed", zap.Int("refreshed", refreshedCount))
+	} else {
+		logger.Info("Token update completed",
+			zap.Int("refreshed", refreshedCount),
+			zap.Int("skipped", skippedCount),
+			zap.Int("threshold_days", thresholdDaysValue))
 	}
 
 	err = kubeconfig.SaveKubeconfig(kubecfg, configPath, logger)
@@ -128,8 +183,6 @@ func run(cmd *cobra.Command, args []string) {
 		logger.Error("Failed to save kubeconfig file", zap.Error(err))
 		return
 	}
-
-	logger.Info("All cluster tokens have been updated successfully")
 }
 
 // filterClusters filters clusters based on comma-separated cluster names or IDs
@@ -207,4 +260,23 @@ func filterClusters(clusters rancher.Clusters, clusterFilter string, logger *zap
 	}
 
 	return filteredClusters
+}
+
+// getThresholdDays returns the threshold days value with priority: flag > env > default
+func getThresholdDays(cmd *cobra.Command) int {
+	// Check if flag was explicitly set
+	if cmd.Flags().Changed("threshold-days") {
+		return thresholdDays
+	}
+
+	// Check environment variable
+	if envValue := os.Getenv("TOKEN_THRESHOLD_DAYS"); envValue != "" {
+		var days int
+		if _, err := fmt.Sscanf(envValue, "%d", &days); err == nil && days > 0 {
+			return days
+		}
+	}
+
+	// Use default value (from flag default)
+	return thresholdDays
 }
