@@ -248,3 +248,111 @@ func TestFilterClusters_BothNameAndIDMatch_NoFalseWarning(t *testing.T) {
 		}
 	}
 }
+
+// TestConfigFlag_FlagRegistered tests that the --config/-c flag is properly registered
+func TestConfigFlag_FlagRegistered(t *testing.T) {
+	cmd := NewRootCmd()
+
+	// Test that the flag exists
+	configFlag := cmd.Flags().Lookup("config")
+	assert.NotNil(t, configFlag, "config flag should be registered")
+
+	// Test that the short flag exists
+	assert.Equal(t, "c", configFlag.Shorthand, "config flag should have 'c' as shorthand")
+
+	// Test default value
+	assert.Equal(t, "", configFlag.DefValue, "config flag should have empty string as default")
+
+	// Test usage text
+	assert.Contains(t, configFlag.Usage, "kubeconfig", "config flag usage should mention kubeconfig")
+}
+
+// TestConfigFlag_AcceptsValue tests that the --config flag accepts a value
+func TestConfigFlag_AcceptsValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		expected string
+	}{
+		{
+			name:     "LongFlag",
+			args:     []string{"--config", "/path/to/config"},
+			expected: "/path/to/config",
+		},
+		{
+			name:     "ShortFlag",
+			args:     []string{"-c", "/custom/kubeconfig"},
+			expected: "/custom/kubeconfig",
+		},
+		{
+			name:     "TildePath",
+			args:     []string{"--config", "~/my-kubeconfig"},
+			expected: "~/my-kubeconfig",
+		},
+		{
+			name:     "RelativePath",
+			args:     []string{"-c", "./configs/dev"},
+			expected: "./configs/dev",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := NewRootCmd()
+			cmd.SetArgs(tt.args)
+
+			// We can't actually run the command without a full Rancher setup,
+			// but we can parse the flags to verify they're set correctly
+			err := cmd.ParseFlags(tt.args)
+			assert.NoError(t, err, "parsing flags should not error")
+
+			configValue, err := cmd.Flags().GetString("config")
+			assert.NoError(t, err, "getting config flag value should not error")
+			assert.Equal(t, tt.expected, configValue, "config flag should have the expected value")
+		})
+	}
+}
+
+// TestConfigFlag_CombinedWithOtherFlags tests that --config works with other flags
+func TestConfigFlag_CombinedWithOtherFlags(t *testing.T) {
+	cmd := NewRootCmd()
+	args := []string{
+		"--config", "/tmp/test-kubeconfig",
+		"--auto-create",
+		"--auth-type", "ldap",
+		"--cluster", "prod,staging",
+	}
+
+	err := cmd.ParseFlags(args)
+	assert.NoError(t, err, "parsing combined flags should not error")
+
+	// Verify config flag
+	configValue, _ := cmd.Flags().GetString("config")
+	assert.Equal(t, "/tmp/test-kubeconfig", configValue)
+
+	// Verify other flags are still working
+	autoCreateValue, _ := cmd.Flags().GetBool("auto-create")
+	assert.True(t, autoCreateValue)
+
+	authTypeValue, _ := cmd.Flags().GetString("auth-type")
+	assert.Equal(t, "ldap", authTypeValue)
+
+	clusterValue, _ := cmd.Flags().GetString("cluster")
+	assert.Equal(t, "prod,staging", clusterValue)
+}
+
+// TestNewRootCmd_ConfigFlagInitialization tests that configPath variable is properly initialized
+func TestNewRootCmd_ConfigFlagInitialization(t *testing.T) {
+	// Reset configPath to ensure clean state
+	configPath = ""
+
+	cmd := NewRootCmd()
+	args := []string{"--config", "/test/path"}
+
+	err := cmd.ParseFlags(args)
+	assert.NoError(t, err)
+
+	// After parsing, the global configPath variable should be set
+	assert.Equal(t, "/test/path", configPath)
+}
+

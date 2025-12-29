@@ -20,6 +20,7 @@ var (
 	passwordFlag          string
 	clusterFlag           string
 	insecureSkipTLSVerify bool
+	configPath            string
 )
 
 func NewRootCmd() *cobra.Command {
@@ -37,6 +38,7 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.Flags().Lookup("password").NoOptDefVal = "-"
 	rootCmd.Flags().StringVar(&clusterFlag, "cluster", "", "Comma-separated list of cluster names or IDs to update")
 	rootCmd.Flags().BoolVar(&insecureSkipTLSVerify, "insecure-skip-tls-verify", false, "Skip TLS certificate verification (insecure, use only for development/testing)")
+	rootCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to kubeconfig file (default: ~/.kube/config)")
 
 	return rootCmd
 }
@@ -70,10 +72,9 @@ func run(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// Use empty string to let expandPath use the default platform-specific path
-	// This will automatically resolve to ~/.kube/config on Unix/macOS and %USERPROFILE%\.kube\config on Windows
-	kubeconfigPath := ""
-	kubecfg, err := kubeconfig.LoadKubeconfig(kubeconfigPath)
+	// Use the configPath from the flag if provided, otherwise use empty string for default
+	// Empty string will automatically resolve to ~/.kube/config on Unix/macOS and %USERPROFILE%\.kube\config on Windows
+	kubecfg, err := kubeconfig.LoadKubeconfig(configPath)
 	if err != nil {
 		logger.Error("Failed to load kubeconfig file", zap.Error(err))
 		return
@@ -122,7 +123,7 @@ func run(cmd *cobra.Command, args []string) {
 		logger.Info("Successfully updated kubeconfig token for cluster: " + v.Name)
 	}
 
-	err = kubeconfig.SaveKubeconfig(kubecfg, kubeconfigPath, logger)
+	err = kubeconfig.SaveKubeconfig(kubecfg, configPath, logger)
 	if err != nil {
 		logger.Error("Failed to save kubeconfig file", zap.Error(err))
 		return
