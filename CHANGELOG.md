@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.5.0...v1.6.0) (2025-12-29)
+
+
+### Features
+
+* respect KUBECONFIG environment variable for kubeconfig file resolution ([#56](https://github.com/chenwei791129/rancher-kubeconfig-updater/issues/56)) ([0973341](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/0973341401af2f7a5f4018cb4af7386e560e259d))
+
 ## [1.5.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.4.0...v1.5.0) (2025-12-19)
 
 
