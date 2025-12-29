@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.6.0...v1.7.0) (2025-12-29)
+
+
+### Features
+
+* add --config flag to specify custom kubeconfig path ([#62](https://github.com/chenwei791129/rancher-kubeconfig-updater/issues/62)) ([269938f](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/269938f7f81b7dc75a8fbf5d8a869a610587efc3))
+
 ## [1.6.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.5.0...v1.6.0) (2025-12-29)
 
 
