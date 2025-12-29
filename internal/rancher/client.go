@@ -1,3 +1,4 @@
+// Package rancher provides client functionality for interacting with Rancher API.
 package rancher
 
 import (
@@ -83,7 +84,6 @@ func NewClient(baseurl, username, password string, authType AuthType, logger *za
 	return client, nil
 }
 
-// GET /v3/clusters
 func (c *Client) ListClusters() (Clusters, error) {
 	var clusters Clusters
 	type getClustersResponse struct {
@@ -113,7 +113,7 @@ func (c *Client) ListClusters() (Clusters, error) {
 	return clusters, nil
 }
 
-func (c *Client) GetClusterToken(clusterId string) string {
+func (c *Client) GetClusterToken(clusterID string) string {
 	type KubeConfigToken struct {
 		Token string `yaml:"token"`
 	}
@@ -129,7 +129,7 @@ func (c *Client) GetClusterToken(clusterId string) string {
 	type getClusterTokenResponse struct {
 		Config string `json:"config"`
 	}
-	url := fmt.Sprintf("%s/v3/clusters/%s?action=generateKubeconfig", c.BaseURL, clusterId)
+	url := fmt.Sprintf("%s/v3/clusters/%s?action=generateKubeconfig", c.BaseURL, clusterID)
 	req, _ := http.NewRequest("POST", url, nil)
 	req.Header.Set("Authorization", "Bearer "+c.token)
 

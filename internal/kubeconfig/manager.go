@@ -1,3 +1,4 @@
+// Package kubeconfig provides functionality for managing Kubernetes configuration files.
 package kubeconfig
 
 import (
