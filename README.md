@@ -160,6 +160,19 @@ Use LDAP authentication with password prompt:
 ./rancher-kubeconfig-updater --auth-type ldap -p
 ```
 
+Use a custom kubeconfig file:
+
+```bash
+# Use custom kubeconfig file
+./rancher-kubeconfig-updater -c /path/to/custom-kubeconfig -p
+
+# Short form with tilde expansion
+./rancher-kubeconfig-updater -c ~/my-configs/dev-kubeconfig -p
+
+# Combined with other flags
+./rancher-kubeconfig-updater -c ./test-config -a --auth-type ldap -p
+```
+
 ### Alternative: Using Stored Credentials
 
 If you have configured `RANCHER_PASSWORD` in your `.env` file or environment variables:
@@ -191,6 +204,7 @@ Flags:
       --auth-type string           Authentication type: 'local' or 'ldap' (default: from RANCHER_AUTH_TYPE env or 'local')
   -a, --auto-create                Automatically create kubeconfig entries for clusters not found in the config
       --cluster string             Comma-separated list of cluster names or IDs to update
+  -c, --config string              Path to kubeconfig file (default: ~/.kube/config)
   -h, --help                       help for rancher-kubeconfig-updater
       --insecure-skip-tls-verify   Skip TLS certificate verification (insecure, use only for development/testing)
   -p, --password string[="-"]      Rancher Password
@@ -216,6 +230,22 @@ Flags:
 - **`-a, --auto-create`**: Automatically create kubeconfig entries for new clusters discovered in Rancher
 
 - **`--auth-type`**: Specify authentication method (`local` or `ldap`)
+
+- **`-c, --config`**: Specify a custom kubeconfig file path instead of using the default `~/.kube/config`
+  ```bash
+  # Use custom kubeconfig file
+  ./rancher-kubeconfig-updater --config /path/to/custom-kubeconfig -p
+  
+  # Short form
+  ./rancher-kubeconfig-updater -c ~/my-configs/dev-kubeconfig -p
+  
+  # Combined with other flags
+  ./rancher-kubeconfig-updater -c ~/kubeconfig-test -a --auth-type ldap -p
+  ```
+  > [!TIP]
+  > - Path expansion (e.g., `~` for home directory) is supported
+  > - Relative paths are supported
+  > - If not specified, defaults to `~/.kube/config`
 
 - **`--cluster`**: Update tokens for specific clusters only (instead of all clusters)
   ```bash
