@@ -10,6 +10,8 @@ A command-line tool to update kubeconfig tokens for Rancher-managed Kubernetes c
 ## Features
 
 - Update kubeconfig tokens for all Rancher-managed clusters
+- **Smart token refresh**: Checks token expiration before regenerating (reduces unnecessary API calls)
+- Configurable expiration threshold (default: 30 days)
 - Auto-create kubeconfig entries for new clusters (optional)
 - Backup kubeconfig before modifications
 - Skip TLS certificate verification for development/testing environments with self-signed certificates
@@ -205,9 +207,11 @@ Flags:
   -a, --auto-create                Automatically create kubeconfig entries for clusters not found in the config
       --cluster string             Comma-separated list of cluster names or IDs to update
   -c, --config string              Path to kubeconfig file (default: ~/.kube/config)
+      --force-refresh              Force refresh all tokens regardless of expiration
   -h, --help                       help for rancher-kubeconfig-updater
       --insecure-skip-tls-verify   Skip TLS certificate verification (insecure, use only for development/testing)
   -p, --password string[="-"]      Rancher Password
+      --threshold-days int         Token expiration threshold in days (default: 30, can be set via TOKEN_THRESHOLD_DAYS env)
   -u, --user string                Rancher Username
 ```
 
@@ -269,6 +273,49 @@ Flags:
   > - Both cluster **names** and **IDs** are supported
   > - The tool will log a warning if a specified cluster is not found
   > - Whitespace around cluster names is automatically trimmed
+
+- **`--threshold-days`**: Set the token expiration threshold in days (default: 30)
+  
+  The tool checks existing tokens and only refreshes them if they are expired or expiring within the threshold period. This reduces unnecessary API calls and improves performance.
+  
+  ```bash
+  # Use default 30-day threshold
+  ./rancher-kubeconfig-updater -p
+  
+  # Set threshold to 7 days (refresh tokens expiring within a week)
+  ./rancher-kubeconfig-updater --threshold-days 7 -p
+  
+  # Set threshold to 60 days
+  ./rancher-kubeconfig-updater --threshold-days 60 -p
+  
+  # Set via environment variable
+  export TOKEN_THRESHOLD_DAYS=15
+  ./rancher-kubeconfig-updater -p
+  ```
+  
+  > [!TIP]
+  > - **Default:** 30 days (matches Rancher's default token TTL)
+  > - Command-line flag takes precedence over environment variable
+  > - Tokens already valid beyond the threshold are **skipped** (not regenerated)
+  > - Useful for scheduled/automated runs to minimize API load
+
+- **`--force-refresh`**: Force refresh all tokens regardless of expiration
+  
+  Bypasses expiration checking and regenerates tokens for all clusters, even if they are still valid.
+  
+  ```bash
+  # Force refresh all tokens
+  ./rancher-kubeconfig-updater --force-refresh -p
+  
+  # Force refresh with other flags
+  ./rancher-kubeconfig-updater --force-refresh --cluster prod,staging -p
+  ```
+  
+  > [!NOTE]
+  > Use this flag when:
+  > - You want to regenerate all tokens immediately
+  > - Token parsing fails and you need to bypass the check
+  > - You've changed Rancher settings and need fresh tokens
 
 - **`--insecure-skip-tls-verify`**: Skip TLS certificate verification (see [TLS Certificate Verification](#tls-certificate-verification) section for details)
 
