@@ -2,11 +2,13 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"rancher-kubeconfig-updater/internal/config"
 	"rancher-kubeconfig-updater/internal/kubeconfig"
 	"rancher-kubeconfig-updater/internal/rancher"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -21,6 +23,8 @@ var (
 	clusterFlag           string
 	insecureSkipTLSVerify bool
 	configPath            string
+	thresholdDays         int
+	forceRefresh          bool
 )
 
 func NewRootCmd() *cobra.Command {
@@ -39,6 +43,8 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.Flags().StringVar(&clusterFlag, "cluster", "", "Comma-separated list of cluster names or IDs to update")
 	rootCmd.Flags().BoolVar(&insecureSkipTLSVerify, "insecure-skip-tls-verify", false, "Skip TLS certificate verification (insecure, use only for development/testing)")
 	rootCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to kubeconfig file (default: ~/.kube/config)")
+	rootCmd.Flags().IntVar(&thresholdDays, "threshold-days", 30, "Expiration threshold in days (default: 30)")
+	rootCmd.Flags().BoolVar(&forceRefresh, "force-refresh", false, "Bypass expiration checks and force regeneration")
 
 	return rootCmd
 }
@@ -65,6 +71,8 @@ func run(cmd *cobra.Command, args []string) {
 	rancherUsername := config.GetConfig(cmd, "user", "RANCHER_USERNAME")
 	rancherAuthType := config.GetConfig(cmd, "auth-type", "RANCHER_AUTH_TYPE")
 	insecureSkipTLSVerify := config.GetBool(cmd, "insecure-skip-tls-verify", "RANCHER_INSECURE_SKIP_TLS_VERIFY")
+	thresholdDays := config.GetInt(cmd, "threshold-days", "TOKEN_THRESHOLD_DAYS")
+	forceRefresh := config.GetBool(cmd, "force-refresh", "FORCE_REFRESH")
 
 	rancherPassword, err := config.GetPassword(cmd, "password", "RANCHER_PASSWORD")
 	if err != nil {
@@ -114,6 +122,58 @@ func run(cmd *cobra.Command, args []string) {
 	}
 
 	for _, v := range clusters {
+		// Get current token from kubeconfig if it exists
+		var currentToken string
+		if authInfo, exists := kubecfg.AuthInfos[v.Name]; exists {
+			currentToken = authInfo.Token
+		}
+
+		// Check if we should regenerate the token
+		shouldRegenerate := forceRefresh // Always regenerate if force-refresh is enabled
+
+		if !shouldRegenerate && currentToken != "" {
+			// Check token expiration if we have a current token
+			expiresAt, err := client.GetTokenExpiration(currentToken)
+			if err != nil {
+				// If we can't check expiration, log warning and regenerate (safer approach)
+				logger.Warn("Failed to check token expiration, will regenerate",
+					zap.String("cluster", v.Name),
+					zap.Error(err))
+				shouldRegenerate = true
+			} else {
+				// Check if token needs refresh based on expiration and threshold
+				shouldRegenerate = rancher.ShouldRefreshToken(expiresAt, thresholdDays)
+
+				if !shouldRegenerate {
+					if expiresAt.IsZero() {
+						logger.Info("Token never expires, skipping regeneration",
+							zap.String("cluster", v.Name))
+					} else {
+						logger.Info("Token is still valid, skipping regeneration",
+							zap.String("cluster", v.Name),
+							zap.String("expiresAt", expiresAt.Format("2006-01-02 15:04:05")),
+							zap.String("daysUntilExpiration", fmt.Sprintf("%.1f", time.Until(expiresAt).Hours()/24)))
+					}
+					continue
+				}
+
+				// Token needs refresh
+				if expiresAt.IsZero() {
+					logger.Info("Regenerating token (never expires but within threshold)",
+						zap.String("cluster", v.Name))
+				} else {
+					logger.Info("Token expires soon, regenerating",
+						zap.String("cluster", v.Name),
+						zap.String("expiresAt", expiresAt.Format("2006-01-02 15:04:05")),
+						zap.String("daysUntilExpiration", fmt.Sprintf("%.1f", time.Until(expiresAt).Hours()/24)))
+				}
+			}
+		} else if shouldRegenerate && forceRefresh {
+			logger.Info("Force refresh enabled, regenerating token",
+				zap.String("cluster", v.Name))
+		}
+
+		// Regenerate token
 		clusterToken := client.GetClusterToken(v.ID)
 		err = kubeconfig.UpdateTokenByName(kubecfg, v.ID, v.Name, clusterToken, rancherURL, autoCreate, logger)
 		if err != nil {

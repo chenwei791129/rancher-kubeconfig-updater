@@ -56,3 +56,26 @@ func GetBool(cmd *cobra.Command, flagName, envKey string) bool {
 	}
 	return boolVal
 }
+
+// GetInt returns the value of an integer flag if it was set, otherwise returns the value from the environment variable.
+// If neither flag nor environment variable is set, returns the default value specified in the flag definition.
+func GetInt(cmd *cobra.Command, flagName, envKey string) int {
+	if cmd.Flags().Changed(flagName) {
+		val, _ := cmd.Flags().GetInt(flagName)
+		return val
+	}
+	// Check environment variable
+	envVal := os.Getenv(envKey)
+	if envVal == "" {
+		// Return flag's default value
+		val, _ := cmd.Flags().GetInt(flagName)
+		return val
+	}
+	intVal, err := strconv.Atoi(envVal)
+	if err != nil {
+		// Return flag's default value on parse error
+		val, _ := cmd.Flags().GetInt(flagName)
+		return val
+	}
+	return intVal
+}
