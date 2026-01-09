@@ -214,7 +214,6 @@ Flags:
   -p, --password string[="-"]      Rancher Password
       --threshold-days int         Expiration threshold in days (default: 30)
   -u, --user string                Rancher Username
-  -u, --user string                Rancher Username
 ```
 
 ### Flag Details
