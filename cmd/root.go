@@ -139,7 +139,6 @@ func run(cmd *cobra.Command, args []string) {
 				logger.Warn("Failed to check token expiration, will regenerate",
 					zap.String("cluster", v.Name),
 					zap.Error(err))
-				shouldRegenerate = true
 			} else {
 				// Check if token needs refresh based on expiration and threshold
 				shouldRegenerate = rancher.ShouldRefreshToken(expiresAt, thresholdDays)
