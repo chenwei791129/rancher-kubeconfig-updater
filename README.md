@@ -10,9 +10,12 @@ A command-line tool to update kubeconfig tokens for Rancher-managed Kubernetes c
 ## Features
 
 - Update kubeconfig tokens for all Rancher-managed clusters
+- **Smart token refresh**: Check token expiration before regenerating (skip unnecessary updates)
 - Auto-create kubeconfig entries for new clusters (optional)
 - Backup kubeconfig before modifications
 - Skip TLS certificate verification for development/testing environments with self-signed certificates
+- Configurable expiration threshold for token refresh
+- Support for never-expiring tokens (TTL = 0)
 
 ## Installation
 
@@ -205,9 +208,12 @@ Flags:
   -a, --auto-create                Automatically create kubeconfig entries for clusters not found in the config
       --cluster string             Comma-separated list of cluster names or IDs to update
   -c, --config string              Path to kubeconfig file (default: ~/.kube/config)
+      --force-refresh              Bypass expiration checks and force regeneration
   -h, --help                       help for rancher-kubeconfig-updater
       --insecure-skip-tls-verify   Skip TLS certificate verification (insecure, use only for development/testing)
   -p, --password string[="-"]      Rancher Password
+      --threshold-days int         Expiration threshold in days (default: 30)
+  -u, --user string                Rancher Username
   -u, --user string                Rancher Username
 ```
 
@@ -272,7 +278,97 @@ Flags:
 
 - **`--insecure-skip-tls-verify`**: Skip TLS certificate verification (see [TLS Certificate Verification](#tls-certificate-verification) section for details)
 
+- **`--threshold-days`**: Set the expiration threshold in days (default: 30)
+  ```bash
+  # Only regenerate tokens expiring within 7 days
+  ./rancher-kubeconfig-updater --threshold-days 7 -p
+  
+  # Use a longer threshold (60 days)
+  ./rancher-kubeconfig-updater --threshold-days 60 -p
+  ```
+  > [!TIP]
+  > - The tool checks token expiration before regenerating
+  > - Tokens valid beyond the threshold are skipped (saves API calls)
+  > - Can be set via `TOKEN_THRESHOLD_DAYS` environment variable
+  > - Default threshold is 30 days
+
+- **`--force-refresh`**: Force regeneration of all tokens, bypassing expiration checks
+  ```bash
+  # Force regenerate all tokens regardless of expiration
+  ./rancher-kubeconfig-updater --force-refresh -p
+  
+  # Combined with other flags
+  ./rancher-kubeconfig-updater --force-refresh --cluster production -p
+  ```
+  > [!TIP]
+  > - Useful when you need to regenerate all tokens immediately
+  > - Bypasses all expiration checks
+  > - Can be set via `FORCE_REFRESH` environment variable
+
 **Note**: Command line flags take precedence over environment variables.
+
+## Token Expiration Checking
+
+The tool includes smart token expiration checking to avoid unnecessary token regeneration. This feature reduces API load on Rancher and speeds up execution when tokens are still valid.
+
+### How It Works
+
+1. **Checks existing tokens**: Before regenerating, the tool queries the Rancher API to check when each token expires
+2. **Compares with threshold**: Tokens are only regenerated if they expire within the threshold period (default: 30 days)
+3. **Skips valid tokens**: Tokens that are still valid beyond the threshold are left unchanged
+4. **Handles never-expiring tokens**: Tokens with TTL = 0 (never expire) are automatically skipped
+
+### Configuration
+
+**Set expiration threshold:**
+```bash
+# Via command-line flag (30 days)
+./rancher-kubeconfig-updater --threshold-days 30 -p
+
+# Via environment variable
+export TOKEN_THRESHOLD_DAYS=30
+./rancher-kubeconfig-updater -p
+
+# Via .env file
+TOKEN_THRESHOLD_DAYS=30
+```
+
+**Force regeneration (bypass checks):**
+```bash
+# Via command-line flag
+./rancher-kubeconfig-updater --force-refresh -p
+
+# Via environment variable
+export FORCE_REFRESH=true
+./rancher-kubeconfig-updater -p
+```
+
+### Example Output
+
+When tokens are checked:
+
+```
+INFO | Token is still valid, skipping regeneration | cluster=production | expiresAt=2024-03-15 10:30:00 | daysUntilExpiration=45.2
+INFO | Token expires soon, regenerating | cluster=staging | expiresAt=2024-02-10 15:20:00 | daysUntilExpiration=15.8
+INFO | Token never expires, skipping regeneration | cluster=development
+```
+
+### Benefits
+
+- **Reduced API calls**: Only regenerates tokens when necessary
+- **Faster execution**: Skips regeneration for valid tokens
+- **Efficient for scheduled runs**: Safe to run frequently without unnecessary load
+- **Respects API rate limits**: Fewer API calls = better for Rancher performance
+- **Automatic handling**: Works seamlessly with existing workflows
+
+### Error Handling
+
+If the tool cannot check a token's expiration (e.g., due to API errors), it will:
+1. Log a warning message
+2. **Safely regenerate the token** (fail-safe approach)
+3. Continue processing other clusters
+
+This ensures tokens are always kept up-to-date even if expiration checking fails.
 
 ## TLS Certificate Verification
 
