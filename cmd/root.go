@@ -2,13 +2,11 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 	"rancher-kubeconfig-updater/internal/config"
 	"rancher-kubeconfig-updater/internal/kubeconfig"
 	"rancher-kubeconfig-updater/internal/rancher"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -128,47 +126,43 @@ func run(cmd *cobra.Command, args []string) {
 			currentToken = authInfo.Token
 		}
 
-		// Check if we should regenerate the token
-		shouldRegenerate := forceRefresh // Always regenerate if force-refresh is enabled
+		// Determine if token regeneration is needed
+		decision := client.DetermineTokenRegeneration(currentToken, forceRefresh, thresholdDays, v.Name)
 
-		if !shouldRegenerate && currentToken != "" {
-			// Check token expiration if we have a current token
-			expiresAt, err := client.GetTokenExpiration(currentToken)
-			if err != nil {
-				// If we can't check expiration, log warning and regenerate (safer approach)
-				logger.Warn("Failed to check token expiration, will regenerate",
+		// Log decision and skip if regeneration not needed
+		if !decision.ShouldRegenerate {
+			switch decision.Reason {
+			case rancher.ReasonNeverExpires:
+				logger.Info("Token never expires, skipping regeneration",
+					zap.String("cluster", v.Name))
+			case rancher.ReasonStillValid:
+				logger.Info("Token is still valid, skipping regeneration",
 					zap.String("cluster", v.Name),
-					zap.Error(err))
-			} else {
-				// Check if token needs refresh based on expiration and threshold
-				shouldRegenerate = rancher.ShouldRefreshToken(expiresAt, thresholdDays)
-
-				if !shouldRegenerate {
-					if expiresAt.IsZero() {
-						logger.Info("Token never expires, skipping regeneration",
-							zap.String("cluster", v.Name))
-					} else {
-						logger.Info("Token is still valid, skipping regeneration",
-							zap.String("cluster", v.Name),
-							zap.String("expiresAt", expiresAt.Format("2006-01-02 15:04:05")),
-							zap.String("daysUntilExpiration", fmt.Sprintf("%.1f", time.Until(expiresAt).Hours()/24)))
-					}
-					continue
-				}
-
-				// Token needs refresh
-				if expiresAt.IsZero() {
-					logger.Info("Regenerating token (never expires but within threshold)",
-						zap.String("cluster", v.Name))
-				} else {
-					logger.Info("Token expires soon, regenerating",
-						zap.String("cluster", v.Name),
-						zap.String("expiresAt", expiresAt.Format("2006-01-02 15:04:05")),
-						zap.String("daysUntilExpiration", fmt.Sprintf("%.1f", time.Until(expiresAt).Hours()/24)))
-				}
+					zap.String("expiresAt", decision.ExpiresAt.Format("2006-01-02 15:04:05")),
+					zap.Int("daysUntilExpiration", int(decision.DaysUntilExpiry)))
 			}
-		} else if shouldRegenerate && forceRefresh {
+			continue
+		}
+
+		// Log regeneration reason
+		switch decision.Reason {
+		case rancher.ReasonForceRefreshEnabled:
 			logger.Info("Force refresh enabled, regenerating token",
+				zap.String("cluster", v.Name))
+		case rancher.ReasonNoExistingToken:
+			logger.Info("No existing token, generating new token",
+				zap.String("cluster", v.Name))
+		case rancher.ReasonExpiresSoon:
+			logger.Info("Token expires soon, regenerating",
+				zap.String("cluster", v.Name),
+				zap.String("expiresAt", decision.ExpiresAt.Format("2006-01-02 15:04:05")),
+				zap.Int("daysUntilExpiration", int(decision.DaysUntilExpiry)))
+		case rancher.ReasonNeverExpiresButRefreshRequired:
+			logger.Info("Regenerating token (never expires but refresh required)",
+				zap.String("cluster", v.Name))
+		case rancher.ReasonExpirationCheckFailed:
+			// Warning already logged in DetermineTokenRegeneration
+			logger.Info("Regenerating token due to expiration check failure",
 				zap.String("cluster", v.Name))
 		}
 

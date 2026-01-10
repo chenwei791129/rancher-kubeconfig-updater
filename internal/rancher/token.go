@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // TokenInfo represents the token information returned by Rancher API
@@ -39,7 +41,7 @@ func (c *Client) GetTokenExpiration(token string) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Bearer "+c.token)
 
 	body, respCode, err := doRequest(c.httpClient, req)
 	if err != nil {
@@ -89,4 +91,109 @@ func ShouldRefreshToken(expiresAt time.Time, thresholdDays int) bool {
 	// Check if token expires within the threshold period
 	// time.Until returns negative duration if time has passed
 	return time.Until(expiresAt) <= threshold
+}
+
+// RegenerationReason represents the reason for token regeneration decision
+type RegenerationReason string
+
+const (
+	// ReasonForceRefreshEnabled indicates force refresh flag is enabled
+	ReasonForceRefreshEnabled RegenerationReason = "force_refresh_enabled"
+	// ReasonNoExistingToken indicates no token exists in kubeconfig
+	ReasonNoExistingToken RegenerationReason = "no_existing_token"
+	// ReasonExpiresSoon indicates token expires within threshold
+	ReasonExpiresSoon RegenerationReason = "expires_soon"
+	// ReasonStillValid indicates token is still valid beyond threshold
+	ReasonStillValid RegenerationReason = "still_valid"
+	// ReasonNeverExpires indicates token never expires
+	ReasonNeverExpires RegenerationReason = "never_expires"
+	// ReasonNeverExpiresButRefreshRequired indicates never-expiring token that needs refresh (should not happen)
+	ReasonNeverExpiresButRefreshRequired RegenerationReason = "never_expires_but_refresh_required"
+	// ReasonExpirationCheckFailed indicates failed to check token expiration
+	ReasonExpirationCheckFailed RegenerationReason = "expiration_check_failed"
+)
+
+// TokenRegenerationDecision represents the decision and context for token regeneration
+type TokenRegenerationDecision struct {
+	ShouldRegenerate bool
+	Reason           RegenerationReason
+	ExpiresAt        time.Time
+	DaysUntilExpiry  float64
+}
+
+// DetermineTokenRegeneration decides whether a token should be regenerated
+// Returns a decision with reason for logging purposes
+// Parameters:
+//   - client: Rancher client for API calls
+//   - currentToken: Current token from kubeconfig (empty if none exists)
+//   - forceRefresh: Whether to bypass expiration checks
+//   - thresholdDays: Refresh threshold in days before expiration
+//   - clusterName: Cluster name for logging context
+func (c *Client) DetermineTokenRegeneration(currentToken string, forceRefresh bool, thresholdDays int, clusterName string) TokenRegenerationDecision {
+	// Force refresh overrides all other checks
+	if forceRefresh {
+		return TokenRegenerationDecision{
+			ShouldRegenerate: true,
+			Reason:           ReasonForceRefreshEnabled,
+		}
+	}
+
+	// No current token means we need to generate one
+	if currentToken == "" {
+		return TokenRegenerationDecision{
+			ShouldRegenerate: true,
+			Reason:           ReasonNoExistingToken,
+		}
+	}
+
+	// Check token expiration
+	expiresAt, err := c.GetTokenExpiration(currentToken)
+	if err != nil {
+		// If we can't check expiration, regenerate to be safe
+		c.logger.Warn("Failed to check token expiration, will regenerate for safety",
+			zap.String("cluster", clusterName),
+			zap.Error(err))
+		return TokenRegenerationDecision{
+			ShouldRegenerate: true,
+			Reason:           ReasonExpirationCheckFailed,
+		}
+	}
+
+	// Check if token needs refresh based on expiration and threshold
+	shouldRefresh := ShouldRefreshToken(expiresAt, thresholdDays)
+
+	if !shouldRefresh {
+		// Token is still valid
+		if expiresAt.IsZero() {
+			return TokenRegenerationDecision{
+				ShouldRegenerate: false,
+				Reason:           ReasonNeverExpires,
+				ExpiresAt:        expiresAt,
+			}
+		}
+		return TokenRegenerationDecision{
+			ShouldRegenerate: false,
+			Reason:           ReasonStillValid,
+			ExpiresAt:        expiresAt,
+			DaysUntilExpiry:  time.Until(expiresAt).Hours() / 24,
+		}
+	}
+
+	// Token needs refresh
+	if expiresAt.IsZero() {
+		// This should never happen based on ShouldRefreshToken logic,
+		// but keep for defensive programming
+		return TokenRegenerationDecision{
+			ShouldRegenerate: true,
+			Reason:           ReasonNeverExpiresButRefreshRequired,
+			ExpiresAt:        expiresAt,
+		}
+	}
+
+	return TokenRegenerationDecision{
+		ShouldRegenerate: true,
+		Reason:           ReasonExpiresSoon,
+		ExpiresAt:        expiresAt,
+		DaysUntilExpiry:  time.Until(expiresAt).Hours() / 24,
+	}
 }

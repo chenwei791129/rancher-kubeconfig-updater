@@ -27,7 +27,7 @@ func TestGetTokenExpiration_Success(t *testing.T) {
 		DoFunc: func(req *http.Request) (*http.Response, error) {
 			// Verify request
 			assert.Equal(t, "/v3/tokens/kubeconfig-u-abc123", req.URL.Path)
-			assert.Equal(t, "Bearer kubeconfig-u-abc123:secretkey123", req.Header.Get("Authorization"))
+			assert.Equal(t, "Bearer test-token", req.Header.Get("Authorization"))
 
 			return &http.Response{
 				StatusCode: http.StatusOK,
@@ -290,4 +290,188 @@ func TestShouldRefreshToken_EdgeCases(t *testing.T) {
 	futureDate := now.Add(10 * 365 * 24 * time.Hour) // ~10 years
 	result = ShouldRefreshToken(futureDate, 30)
 	assert.False(t, result, "Token expiring in far future should not need refresh")
+}
+
+// TestDetermineTokenRegeneration tests the token regeneration decision logic
+func TestDetermineTokenRegeneration(t *testing.T) {
+	logger := zap.NewNop()
+
+	tests := []struct {
+		name             string
+		currentToken     string
+		forceRefresh     bool
+		thresholdDays    int
+		mockResponse     string
+		mockStatusCode   int
+		mockError        error
+		expectedDecision TokenRegenerationDecision
+		description      string
+	}{
+		{
+			name:          "force refresh enabled",
+			currentToken:  "kubeconfig-u-abc:secret",
+			forceRefresh:  true,
+			thresholdDays: 30,
+			expectedDecision: TokenRegenerationDecision{
+				ShouldRegenerate: true,
+				Reason:           ReasonForceRefreshEnabled,
+			},
+			description: "Force refresh should always regenerate",
+		},
+		{
+			name:          "no existing token",
+			currentToken:  "",
+			forceRefresh:  false,
+			thresholdDays: 30,
+			expectedDecision: TokenRegenerationDecision{
+				ShouldRegenerate: true,
+				Reason:           ReasonNoExistingToken,
+			},
+			description: "No token should trigger regeneration",
+		},
+		{
+			name:           "token expires soon",
+			currentToken:   "kubeconfig-u-abc:secret",
+			forceRefresh:   false,
+			thresholdDays:  30,
+			mockStatusCode: http.StatusOK,
+			mockResponse: `{
+				"expiresAt": "` + time.Now().Add(15*24*time.Hour).Format(time.RFC3339) + `",
+				"ttl": 1296000000,
+				"expired": false,
+				"created": "2024-01-01T00:00:00Z",
+				"enabled": true
+			}`,
+			expectedDecision: TokenRegenerationDecision{
+				ShouldRegenerate: true,
+				Reason:           ReasonExpiresSoon,
+			},
+			description: "Token expiring within threshold should regenerate",
+		},
+		{
+			name:           "token still valid",
+			currentToken:   "kubeconfig-u-abc:secret",
+			forceRefresh:   false,
+			thresholdDays:  30,
+			mockStatusCode: http.StatusOK,
+			mockResponse: `{
+				"expiresAt": "` + time.Now().Add(60*24*time.Hour).Format(time.RFC3339) + `",
+				"ttl": 5184000000,
+				"expired": false,
+				"created": "2024-01-01T00:00:00Z",
+				"enabled": true
+			}`,
+			expectedDecision: TokenRegenerationDecision{
+				ShouldRegenerate: false,
+				Reason:           ReasonStillValid,
+			},
+			description: "Token valid beyond threshold should not regenerate",
+		},
+		{
+			name:           "token never expires",
+			currentToken:   "kubeconfig-u-abc:secret",
+			forceRefresh:   false,
+			thresholdDays:  30,
+			mockStatusCode: http.StatusOK,
+			mockResponse: `{
+				"expiresAt": "",
+				"ttl": 0,
+				"expired": false,
+				"created": "2024-01-01T00:00:00Z",
+				"enabled": true
+			}`,
+			expectedDecision: TokenRegenerationDecision{
+				ShouldRegenerate: false,
+				Reason:           ReasonNeverExpires,
+			},
+			description: "Never-expiring token should not regenerate",
+		},
+		{
+			name:           "expiration check failed",
+			currentToken:   "kubeconfig-u-abc:secret",
+			forceRefresh:   false,
+			thresholdDays:  30,
+			mockStatusCode: http.StatusUnauthorized,
+			mockResponse:   `{"error": "unauthorized"}`,
+			expectedDecision: TokenRegenerationDecision{
+				ShouldRegenerate: true,
+				Reason:           ReasonExpirationCheckFailed,
+			},
+			description: "Failed expiration check should trigger regeneration for safety",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mockClient *MockHTTPClient
+			
+			// Only create mock client if we need to make API calls
+			if tt.currentToken != "" && !tt.forceRefresh {
+				mockClient = &MockHTTPClient{
+					DoFunc: func(req *http.Request) (*http.Response, error) {
+						if tt.mockError != nil {
+							return nil, tt.mockError
+						}
+						return &http.Response{
+							StatusCode: tt.mockStatusCode,
+							Body:       io.NopCloser(bytes.NewBufferString(tt.mockResponse)),
+						}, nil
+					},
+				}
+			} else {
+				// Create a mock that should not be called
+				mockClient = &MockHTTPClient{
+					DoFunc: func(req *http.Request) (*http.Response, error) {
+						t.Fatal("HTTP request should not be made for this test case")
+						return nil, nil
+					},
+				}
+			}
+
+			client := &Client{
+				token:      "test-token",
+				httpClient: mockClient,
+				BaseURL:    "https://rancher.example.com",
+				logger:     logger,
+			}
+
+			decision := client.DetermineTokenRegeneration(tt.currentToken, tt.forceRefresh, tt.thresholdDays, "test-cluster")
+
+			assert.Equal(t, tt.expectedDecision.ShouldRegenerate, decision.ShouldRegenerate, tt.description)
+			assert.Equal(t, tt.expectedDecision.Reason, decision.Reason, tt.description)
+
+			// Validate expiration time is set correctly for time-based decisions
+			if decision.Reason == ReasonStillValid || decision.Reason == ReasonExpiresSoon {
+				assert.False(t, decision.ExpiresAt.IsZero(), "ExpiresAt should be set for time-based decisions")
+			}
+			if decision.Reason == ReasonNeverExpires {
+				assert.True(t, decision.ExpiresAt.IsZero(), "ExpiresAt should be zero for never-expiring tokens")
+			}
+		})
+	}
+}
+
+// TestDetermineTokenRegeneration_WithInvalidToken tests edge cases with invalid tokens
+func TestDetermineTokenRegeneration_WithInvalidToken(t *testing.T) {
+	logger := zap.NewNop()
+
+	mockClient := &MockHTTPClient{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			t.Fatal("HTTP request should not be made for invalid token format")
+			return nil, nil
+		},
+	}
+
+	client := &Client{
+		token:      "test-token",
+		httpClient: mockClient,
+		BaseURL:    "https://rancher.example.com",
+		logger:     logger,
+	}
+
+	// Test with invalid token format (should trigger expiration check failure)
+	decision := client.DetermineTokenRegeneration("invalid-token-no-colon", false, 30, "test-cluster")
+
+	assert.True(t, decision.ShouldRegenerate, "Invalid token should trigger regeneration")
+	assert.Equal(t, ReasonExpirationCheckFailed, decision.Reason)
 }
