@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.7.0...v1.8.0) (2026-01-10)
+
+
+### Features
+
+* add token expiration checking to avoid unnecessary regeneration ([#67](https://github.com/chenwei791129/rancher-kubeconfig-updater/issues/67)) ([71f08d5](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/71f08d57b409f33e92f500fe46e088e201916467))
+
 ## [1.7.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.6.0...v1.7.0) (2025-12-29)
 
 
