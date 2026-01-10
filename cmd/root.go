@@ -43,7 +43,7 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.Flags().StringVar(&clusterFlag, "cluster", "", "Comma-separated list of cluster names or IDs to update")
 	rootCmd.Flags().BoolVar(&insecureSkipTLSVerify, "insecure-skip-tls-verify", false, "Skip TLS certificate verification (insecure, use only for development/testing)")
 	rootCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to kubeconfig file (default: ~/.kube/config)")
-	rootCmd.Flags().IntVar(&thresholdDays, "threshold-days", 30, "Expiration threshold in days (default: 30)")
+	rootCmd.Flags().IntVar(&thresholdDays, "threshold-days", 30, "Expiration threshold in days")
 	rootCmd.Flags().BoolVar(&forceRefresh, "force-refresh", false, "Bypass expiration checks and force regeneration")
 
 	return rootCmd
