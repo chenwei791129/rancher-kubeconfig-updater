@@ -356,3 +356,110 @@ func TestNewRootCmd_ConfigFlagInitialization(t *testing.T) {
 	assert.Equal(t, "/test/path", configPath)
 }
 
+// TestDryRunFlag_FlagRegistered tests that the --dry-run flag is properly registered
+func TestDryRunFlag_FlagRegistered(t *testing.T) {
+	cmd := NewRootCmd()
+
+	// Test that the flag exists
+	dryRunFlag := cmd.Flags().Lookup("dry-run")
+	assert.NotNil(t, dryRunFlag, "dry-run flag should be registered")
+
+	// Test default value is false
+	assert.Equal(t, "false", dryRunFlag.DefValue, "dry-run flag should default to false")
+
+	// Test usage text
+	assert.Contains(t, dryRunFlag.Usage, "Preview", "dry-run flag usage should mention Preview")
+}
+
+// TestDryRunFlag_AcceptsValue tests that the --dry-run flag accepts a boolean value
+func TestDryRunFlag_AcceptsValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		expected bool
+	}{
+		{
+			name:     "DryRunEnabled",
+			args:     []string{"--dry-run"},
+			expected: true,
+		},
+		{
+			name:     "DryRunExplicitTrue",
+			args:     []string{"--dry-run=true"},
+			expected: true,
+		},
+		{
+			name:     "DryRunExplicitFalse",
+			args:     []string{"--dry-run=false"},
+			expected: false,
+		},
+		{
+			name:     "DryRunNotSpecified",
+			args:     []string{},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := NewRootCmd()
+			cmd.SetArgs(tt.args)
+
+			err := cmd.ParseFlags(tt.args)
+			assert.NoError(t, err, "parsing flags should not error")
+
+			dryRunValue, err := cmd.Flags().GetBool("dry-run")
+			assert.NoError(t, err, "getting dry-run flag value should not error")
+			assert.Equal(t, tt.expected, dryRunValue, "dry-run flag should have the expected value")
+		})
+	}
+}
+
+// TestDryRunFlag_CombinedWithOtherFlags tests that --dry-run works with other flags
+func TestDryRunFlag_CombinedWithOtherFlags(t *testing.T) {
+	cmd := NewRootCmd()
+	args := []string{
+		"--dry-run",
+		"--config", "/tmp/test-kubeconfig",
+		"--auto-create",
+		"--cluster", "prod,staging",
+		"--force-refresh",
+	}
+
+	err := cmd.ParseFlags(args)
+	assert.NoError(t, err, "parsing combined flags should not error")
+
+	// Verify dry-run flag
+	dryRunValue, _ := cmd.Flags().GetBool("dry-run")
+	assert.True(t, dryRunValue)
+
+	// Verify other flags are still working
+	configValue, _ := cmd.Flags().GetString("config")
+	assert.Equal(t, "/tmp/test-kubeconfig", configValue)
+
+	autoCreateValue, _ := cmd.Flags().GetBool("auto-create")
+	assert.True(t, autoCreateValue)
+
+	clusterValue, _ := cmd.Flags().GetString("cluster")
+	assert.Equal(t, "prod,staging", clusterValue)
+
+	forceRefreshValue, _ := cmd.Flags().GetBool("force-refresh")
+	assert.True(t, forceRefreshValue)
+}
+
+// TestNewRootCmd_DryRunFlagInitialization tests that dryRun variable is properly initialized
+func TestNewRootCmd_DryRunFlagInitialization(t *testing.T) {
+	// Reset dryRun to ensure clean state
+	dryRun = false
+
+	cmd := NewRootCmd()
+	args := []string{"--dry-run"}
+
+	err := cmd.ParseFlags(args)
+	assert.NoError(t, err)
+
+	// After parsing, the global dryRun variable should be set
+	assert.True(t, dryRun)
+}
+
+
