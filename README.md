@@ -11,6 +11,7 @@ A command-line tool to update kubeconfig tokens for Rancher-managed Kubernetes c
 
 - Update kubeconfig tokens for all Rancher-managed clusters
 - **Smart token refresh**: Check token expiration before regenerating (skip unnecessary updates)
+- **Dry-run mode**: Preview changes without modifying kubeconfig (safe testing and validation)
 - Auto-create kubeconfig entries for new clusters (optional)
 - Backup kubeconfig before modifications
 - Skip TLS certificate verification for development/testing environments with self-signed certificates
@@ -208,6 +209,7 @@ Flags:
   -a, --auto-create                Automatically create kubeconfig entries for clusters not found in the config
       --cluster string             Comma-separated list of cluster names or IDs to update
   -c, --config string              Path to kubeconfig file (default: ~/.kube/config)
+      --dry-run                    Preview changes without modifying kubeconfig
       --force-refresh              Bypass expiration checks and force regeneration
   -h, --help                       help for rancher-kubeconfig-updater
       --insecure-skip-tls-verify   Skip TLS certificate verification (insecure, use only for development/testing)
@@ -274,6 +276,36 @@ Flags:
   > - Both cluster **names** and **IDs** are supported
   > - The tool will log a warning if a specified cluster is not found
   > - Whitespace around cluster names is automatically trimmed
+
+- **`--dry-run`**: Preview changes without actually modifying the kubeconfig file
+  ```bash
+  # Preview token updates for all clusters
+  ./rancher-kubeconfig-updater --dry-run -p
+  
+  # Preview with specific clusters
+  ./rancher-kubeconfig-updater --dry-run --cluster prod,staging -p
+  
+  # Preview with auto-create enabled
+  ./rancher-kubeconfig-updater --dry-run --auto-create -p
+  
+  # Preview with custom config file
+  ./rancher-kubeconfig-updater --dry-run -c ~/my-kubeconfig -p
+  ```
+  > [!TIP]
+  > - **Read-only mode**: Authenticates to Rancher and checks token status without making changes
+  > - **Preview changes**: Shows which clusters would be updated and why
+  > - **No side effects**: Doesn't modify kubeconfig or create backup files
+  > - **Safe testing**: Test configuration and credentials before making actual changes
+  > - **CI/CD friendly**: Validate token status in pipelines without modifications
+  > 
+  > **Example output:**
+  > ```
+  > [DRY-RUN] Mode enabled - no changes will be made to kubeconfig
+  > INFO | [DRY-RUN] Would regenerate token | cluster=my-cluster-1 | reason=expires-soon | daysUntilExpiration=15.8
+  > INFO | [DRY-RUN] Would skip token regeneration | cluster=my-cluster-2 | reason=still-valid | daysUntilExpiration=45.2
+  > INFO | [DRY-RUN] Summary | clustersToUpdate=1 | clustersToSkip=18
+  > [DRY-RUN] No changes were made to kubeconfig
+  > ```
 
 - **`--insecure-skip-tls-verify`**: Skip TLS certificate verification (see [TLS Certificate Verification](#tls-certificate-verification) section for details)
 
