@@ -16,9 +16,3 @@ Use `@/openspec/AGENTS.md` to learn:
 Keep this managed block so 'openspec update' can refresh the instructions.
 
 <!-- OPENSPEC:END -->
-
-See @README.md for project overview
-
-# Additional Instructions
-- GitHub Cli @.github/instructions/github-cli.instructions.md
-- Testing @.github/instructions/testing.instructions.md
