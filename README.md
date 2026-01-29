@@ -297,7 +297,8 @@ Flags:
   > - **No side effects**: Doesn't modify kubeconfig or create backup files
   > - **Safe testing**: Test configuration and credentials before making actual changes
   > - **CI/CD friendly**: Validate token status in pipelines without modifications
-  > 
+  > - Can be set via `DRY_RUN` environment variable
+  >
   > **Example output:**
   > ```
   > [DRY-RUN] Mode enabled - no changes will be made to kubeconfig

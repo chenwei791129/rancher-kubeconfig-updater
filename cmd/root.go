@@ -73,6 +73,7 @@ func run(cmd *cobra.Command, args []string) {
 	insecureSkipTLSVerify := config.GetBool(cmd, "insecure-skip-tls-verify", "RANCHER_INSECURE_SKIP_TLS_VERIFY")
 	thresholdDays := config.GetInt(cmd, "threshold-days", "TOKEN_THRESHOLD_DAYS")
 	forceRefresh := config.GetBool(cmd, "force-refresh", "FORCE_REFRESH")
+	dryRun := config.GetBool(cmd, "dry-run", "DRY_RUN")
 
 	// Log dry-run mode if enabled
 	if dryRun {
@@ -140,82 +141,14 @@ func run(cmd *cobra.Command, args []string) {
 		decision := client.DetermineTokenRegeneration(currentToken, forceRefresh, thresholdDays, v.Name)
 
 		// Log decision and skip if regeneration not needed
+		logTokenDecision(logger, decision, v.Name, dryRun)
+
 		if !decision.ShouldRegenerate {
 			clustersToSkip++
-			logPrefix := ""
-			if dryRun {
-				logPrefix = "[DRY-RUN] Would skip token regeneration | "
-			}
-			switch decision.Reason {
-			case rancher.ReasonNeverExpires:
-				if dryRun {
-					logger.Info(logPrefix+"cluster="+v.Name+" | reason=never-expires")
-				} else {
-					logger.Info("Token never expires, skipping regeneration",
-						zap.String("cluster", v.Name))
-				}
-			case rancher.ReasonStillValid:
-				if dryRun {
-					logger.Info(logPrefix+"cluster="+v.Name+" | reason=still-valid",
-						zap.Float64("daysUntilExpiration", decision.DaysUntilExpiry))
-				} else {
-					logger.Info("Token is still valid, skipping regeneration",
-						zap.String("cluster", v.Name),
-						zap.String("expiresAt", decision.ExpiresAt.Format("2006-01-02 15:04:05")),
-						zap.Int("daysUntilExpiration", int(decision.DaysUntilExpiry)))
-				}
-			}
 			continue
 		}
 
 		clustersToUpdate++
-
-		// Log regeneration reason
-		logPrefix := ""
-		if dryRun {
-			logPrefix = "[DRY-RUN] Would regenerate token | "
-		}
-		switch decision.Reason {
-		case rancher.ReasonForceRefreshEnabled:
-			if dryRun {
-				logger.Info(logPrefix + "cluster=" + v.Name + " | reason=force-refresh")
-			} else {
-				logger.Info("Force refresh enabled, regenerating token",
-					zap.String("cluster", v.Name))
-			}
-		case rancher.ReasonNoExistingToken:
-			if dryRun {
-				logger.Info(logPrefix + "cluster=" + v.Name + " | reason=no-existing-token")
-			} else {
-				logger.Info("No existing token, generating new token",
-					zap.String("cluster", v.Name))
-			}
-		case rancher.ReasonExpiresSoon:
-			if dryRun {
-				logger.Info(logPrefix+"cluster="+v.Name+" | reason=expires-soon",
-					zap.Float64("daysUntilExpiration", decision.DaysUntilExpiry))
-			} else {
-				logger.Info("Token expires soon, regenerating",
-					zap.String("cluster", v.Name),
-					zap.String("expiresAt", decision.ExpiresAt.Format("2006-01-02 15:04:05")),
-					zap.Int("daysUntilExpiration", int(decision.DaysUntilExpiry)))
-			}
-		case rancher.ReasonNeverExpiresButRefreshRequired:
-			if dryRun {
-				logger.Info(logPrefix + "cluster=" + v.Name + " | reason=never-expires-but-refresh-required")
-			} else {
-				logger.Info("Regenerating token (never expires but refresh required)",
-					zap.String("cluster", v.Name))
-			}
-		case rancher.ReasonExpirationCheckFailed:
-			// Warning already logged in DetermineTokenRegeneration
-			if dryRun {
-				logger.Info(logPrefix + "cluster=" + v.Name + " | reason=expiration-check-failed")
-			} else {
-				logger.Info("Regenerating token due to expiration check failure",
-					zap.String("cluster", v.Name))
-			}
-		}
 
 		// Skip actual token regeneration and kubeconfig update in dry-run mode
 		if dryRun {
@@ -248,6 +181,59 @@ func run(cmd *cobra.Command, args []string) {
 	}
 
 	logger.Info("All cluster tokens have been updated successfully")
+}
+
+// logTokenDecision logs the token regeneration decision with consistent formatting
+func logTokenDecision(logger *zap.Logger, decision rancher.TokenRegenerationDecision, clusterName string, dryRun bool) {
+	if !decision.ShouldRegenerate {
+		// Log skip decisions
+		if dryRun {
+			logger.Info("[DRY-RUN] Would skip token regeneration",
+				zap.String("cluster", clusterName),
+				zap.String("reason", string(decision.Reason)),
+				zap.Float64("daysUntilExpiration", decision.DaysUntilExpiry))
+		} else {
+			switch decision.Reason {
+			case rancher.ReasonNeverExpires:
+				logger.Info("Token never expires, skipping regeneration",
+					zap.String("cluster", clusterName))
+			case rancher.ReasonStillValid:
+				logger.Info("Token is still valid, skipping regeneration",
+					zap.String("cluster", clusterName),
+					zap.String("expiresAt", decision.ExpiresAt.Format("2006-01-02 15:04:05")),
+					zap.Int("daysUntilExpiration", int(decision.DaysUntilExpiry)))
+			}
+		}
+		return
+	}
+
+	// Log regeneration decisions
+	if dryRun {
+		logger.Info("[DRY-RUN] Would regenerate token",
+			zap.String("cluster", clusterName),
+			zap.String("reason", string(decision.Reason)),
+			zap.Float64("daysUntilExpiration", decision.DaysUntilExpiry))
+	} else {
+		switch decision.Reason {
+		case rancher.ReasonForceRefreshEnabled:
+			logger.Info("Force refresh enabled, regenerating token",
+				zap.String("cluster", clusterName))
+		case rancher.ReasonNoExistingToken:
+			logger.Info("No existing token, generating new token",
+				zap.String("cluster", clusterName))
+		case rancher.ReasonExpiresSoon:
+			logger.Info("Token expires soon, regenerating",
+				zap.String("cluster", clusterName),
+				zap.String("expiresAt", decision.ExpiresAt.Format("2006-01-02 15:04:05")),
+				zap.Int("daysUntilExpiration", int(decision.DaysUntilExpiry)))
+		case rancher.ReasonNeverExpiresButRefreshRequired:
+			logger.Info("Regenerating token (never expires but refresh required)",
+				zap.String("cluster", clusterName))
+		case rancher.ReasonExpirationCheckFailed:
+			logger.Info("Regenerating token due to expiration check failure",
+				zap.String("cluster", clusterName))
+		}
+	}
 }
 
 // filterClusters filters clusters based on comma-separated cluster names or IDs
