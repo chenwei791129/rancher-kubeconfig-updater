@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.8.0...v1.9.0) (2026-01-31)
+
+
+### Features
+
+* add --dry-run flag to preview changes without modifying kubeconfig ([#71](https://github.com/chenwei791129/rancher-kubeconfig-updater/issues/71)) ([7f46102](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/7f461020468afd58b868004a69283e4ceb92069a))
+
 ## [1.8.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.7.0...v1.8.0) (2026-01-10)
 
 
