@@ -1004,13 +1004,13 @@ func TestLoadKubeconfig_WithKUBECONFIG_SingleFile(t *testing.T) {
 
 	// Set KUBECONFIG environment variable
 	t.Setenv("KUBECONFIG", kubeconfigFile)
-	
+
 	// Load with empty path (should use KUBECONFIG)
 	config, err := LoadKubeconfig("")
 	if err != nil {
 		t.Fatalf("LoadKubeconfig() error = %v", err)
 	}
-	
+
 	// Verify structure
 	if len(config.Clusters) != 1 {
 		t.Errorf("Expected 1 cluster, got %d", len(config.Clusters))
@@ -1025,12 +1025,12 @@ func TestLoadKubeconfig_WithKUBECONFIG_MultipleFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	file1 := filepath.Join(tmpDir, "config1")
 	file2 := filepath.Join(tmpDir, "config2")
-	
+
 	// Create first config file
 	if err := os.WriteFile(file1, []byte(createTestKubeconfigContent()), 0600); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
-	
+
 	// Create second config file (doesn't exist yet)
 	// According to kubectl behavior, when multiple files are specified:
 	// - For reading: merge all files
@@ -1039,13 +1039,13 @@ func TestLoadKubeconfig_WithKUBECONFIG_MultipleFiles(t *testing.T) {
 	// Set KUBECONFIG with multiple files (OS-specific path separator)
 	separator := string(os.PathListSeparator)
 	t.Setenv("KUBECONFIG", file1+separator+file2)
-	
+
 	// Load with empty path (should use first file from KUBECONFIG)
 	config, err := LoadKubeconfig("")
 	if err != nil {
 		t.Fatalf("LoadKubeconfig() error = %v", err)
 	}
-	
+
 	// Verify structure loaded from first file
 	if len(config.Clusters) != 1 {
 		t.Errorf("Expected 1 cluster, got %d", len(config.Clusters))
@@ -1059,20 +1059,20 @@ func TestSaveKubeconfig_WithKUBECONFIG_SingleFile(t *testing.T) {
 
 	// Set KUBECONFIG environment variable
 	t.Setenv("KUBECONFIG", kubeconfigFile)
-	
+
 	config := createTestKubeconfig()
-	
+
 	// Save with empty path (should use KUBECONFIG)
 	err := SaveKubeconfig(config, "", nil)
 	if err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
-	
+
 	// Verify file was created at KUBECONFIG location
 	if _, err := os.Stat(kubeconfigFile); os.IsNotExist(err) {
 		t.Error("SaveKubeconfig() did not create file at KUBECONFIG location")
 	}
-	
+
 	// Verify content
 	loaded, err := LoadKubeconfig("")
 	if err != nil {
@@ -1088,7 +1088,7 @@ func TestSaveKubeconfig_WithKUBECONFIG_MultipleFiles_FirstExists(t *testing.T) {
 	tmpDir := t.TempDir()
 	file1 := filepath.Join(tmpDir, "config1")
 	file2 := filepath.Join(tmpDir, "config2")
-	
+
 	// Create first file (existing)
 	if err := os.WriteFile(file1, []byte(createTestKubeconfigContent()), 0600); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
@@ -1097,16 +1097,16 @@ func TestSaveKubeconfig_WithKUBECONFIG_MultipleFiles_FirstExists(t *testing.T) {
 	// Set KUBECONFIG with multiple files
 	separator := string(os.PathListSeparator)
 	t.Setenv("KUBECONFIG", file1+separator+file2)
-	
+
 	config := createTestKubeconfig()
 	config.AuthInfos["test-cluster"].Token = "new-token"
-	
+
 	// Save with empty path (should use first existing file)
 	err := SaveKubeconfig(config, "", nil)
 	if err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
-	
+
 	// Verify first file was updated
 	loaded, err := LoadKubeconfig(file1)
 	if err != nil {
@@ -1115,7 +1115,7 @@ func TestSaveKubeconfig_WithKUBECONFIG_MultipleFiles_FirstExists(t *testing.T) {
 	if loaded.AuthInfos["test-cluster"].Token != "new-token" {
 		t.Error("First file should be updated")
 	}
-	
+
 	// Verify second file was not created
 	if _, err := os.Stat(file2); !os.IsNotExist(err) {
 		t.Error("Second file should not be created when first file exists")
@@ -1127,21 +1127,21 @@ func TestSaveKubeconfig_WithKUBECONFIG_MultipleFiles_NoneExist(t *testing.T) {
 	tmpDir := t.TempDir()
 	file1 := filepath.Join(tmpDir, "config1")
 	file2 := filepath.Join(tmpDir, "config2")
-	
+
 	// Neither file exists yet
 
 	// Set KUBECONFIG with multiple files
 	separator := string(os.PathListSeparator)
 	t.Setenv("KUBECONFIG", file1+separator+file2)
-	
+
 	config := createTestKubeconfig()
-	
+
 	// Save with empty path
 	err := SaveKubeconfig(config, "", nil)
 	if err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
-	
+
 	// Note: ClientConfigLoadingRules.GetDefaultFilename() returns the first file when none exist.
 	// This differs from kubectl's PathOptions.GetDefaultFilename() which returns the last file.
 	// We use ClientConfigLoadingRules because:
@@ -1165,13 +1165,13 @@ func TestLoadKubeconfig_ExplicitPathOverridesKUBECONFIG(t *testing.T) {
 	tmpDir := t.TempDir()
 	kubeconfigFile := filepath.Join(tmpDir, "env-config")
 	explicitFile := filepath.Join(tmpDir, "explicit-config")
-	
+
 	// Create both files with different content
 	content1 := createTestKubeconfigContent()
 	if err := os.WriteFile(kubeconfigFile, []byte(content1), 0600); err != nil {
 		t.Fatalf("Failed to write env config: %v", err)
 	}
-	
+
 	// Create explicit file with different token
 	config2 := createTestKubeconfig()
 	config2.AuthInfos["test-cluster"].Token = "explicit-token"
@@ -1181,13 +1181,13 @@ func TestLoadKubeconfig_ExplicitPathOverridesKUBECONFIG(t *testing.T) {
 
 	// Set KUBECONFIG environment variable
 	t.Setenv("KUBECONFIG", kubeconfigFile)
-	
+
 	// Load with explicit path (should ignore KUBECONFIG)
 	config, err := LoadKubeconfig(explicitFile)
 	if err != nil {
 		t.Fatalf("LoadKubeconfig() error = %v", err)
 	}
-	
+
 	// Verify we loaded from explicit file, not KUBECONFIG
 	if config.AuthInfos["test-cluster"].Token != "explicit-token" {
 		t.Errorf("Expected explicit-token, got %s", config.AuthInfos["test-cluster"].Token)
@@ -1202,20 +1202,20 @@ func TestSaveKubeconfig_ExplicitPathOverridesKUBECONFIG(t *testing.T) {
 
 	// Set KUBECONFIG environment variable
 	t.Setenv("KUBECONFIG", kubeconfigFile)
-	
+
 	config := createTestKubeconfig()
-	
+
 	// Save with explicit path (should ignore KUBECONFIG)
 	err := SaveKubeconfig(config, explicitFile, nil)
 	if err != nil {
 		t.Fatalf("SaveKubeconfig() error = %v", err)
 	}
-	
+
 	// Verify file was created at explicit location
 	if _, err := os.Stat(explicitFile); os.IsNotExist(err) {
 		t.Error("SaveKubeconfig() should create file at explicit path")
 	}
-	
+
 	// Verify KUBECONFIG file was not created
 	if _, err := os.Stat(kubeconfigFile); !os.IsNotExist(err) {
 		t.Error("SaveKubeconfig() should not create file at KUBECONFIG location when explicit path provided")
@@ -1261,5 +1261,287 @@ func TestLoadKubeconfig_EmptyKUBECONFIG_UsesDefault(t *testing.T) {
 	// Should return empty config if default doesn't exist, or loaded config if it does
 	if config == nil {
 		t.Error("LoadKubeconfig() should return a config structure")
+	}
+}
+
+// ============================================================================
+// MergeKubeconfig Tests
+// ============================================================================
+
+// createTestSourceKubeconfig creates a source kubeconfig with direct contexts
+func createTestSourceKubeconfig() *api.Config {
+	config := api.NewConfig()
+
+	// Primary cluster
+	config.Clusters["demo-cluster"] = &api.Cluster{
+		Server: "https://rancher.example.com/k8s/clusters/c-m-demo",
+	}
+
+	// Direct clusters
+	config.Clusters["demo-cluster-node01"] = &api.Cluster{
+		Server:                   "https://192.168.1.101:6443",
+		CertificateAuthorityData: []byte("test-ca-data"),
+	}
+	config.Clusters["demo-cluster-node02"] = &api.Cluster{
+		Server:                   "https://192.168.1.102:6443",
+		CertificateAuthorityData: []byte("test-ca-data"),
+	}
+
+	// Primary context
+	config.Contexts["demo-cluster"] = &api.Context{
+		Cluster:  "demo-cluster",
+		AuthInfo: "demo-cluster",
+	}
+
+	// Direct contexts
+	config.Contexts["demo-cluster-node01"] = &api.Context{
+		Cluster:  "demo-cluster-node01",
+		AuthInfo: "demo-cluster",
+	}
+	config.Contexts["demo-cluster-node02"] = &api.Context{
+		Cluster:  "demo-cluster-node02",
+		AuthInfo: "demo-cluster",
+	}
+
+	// User (shared by all contexts)
+	config.AuthInfos["demo-cluster"] = &api.AuthInfo{
+		Token: "kubeconfig-user:demo-token",
+	}
+
+	config.CurrentContext = "demo-cluster"
+
+	return config
+}
+
+// TestMergeKubeconfig_WithDirectlyEnabled tests merging all contexts
+func TestMergeKubeconfig_WithDirectlyEnabled(t *testing.T) {
+	target := api.NewConfig()
+	source := createTestSourceKubeconfig()
+
+	MergeKubeconfig(target, source, "demo-cluster", true)
+
+	// Verify all clusters were merged
+	if len(target.Clusters) != 3 {
+		t.Errorf("Expected 3 clusters, got %d", len(target.Clusters))
+	}
+	if target.Clusters["demo-cluster"] == nil {
+		t.Error("Primary cluster should be merged")
+	}
+	if target.Clusters["demo-cluster-node01"] == nil {
+		t.Error("Direct cluster node01 should be merged")
+	}
+	if target.Clusters["demo-cluster-node02"] == nil {
+		t.Error("Direct cluster node02 should be merged")
+	}
+
+	// Verify all contexts were merged
+	if len(target.Contexts) != 3 {
+		t.Errorf("Expected 3 contexts, got %d", len(target.Contexts))
+	}
+
+	// Verify authInfo was merged
+	if len(target.AuthInfos) != 1 {
+		t.Errorf("Expected 1 authInfo (shared), got %d", len(target.AuthInfos))
+	}
+	if target.AuthInfos["demo-cluster"] == nil {
+		t.Error("AuthInfo should be merged")
+	}
+	if target.AuthInfos["demo-cluster"].Token != "kubeconfig-user:demo-token" {
+		t.Errorf("Expected token kubeconfig-user:demo-token, got %s", target.AuthInfos["demo-cluster"].Token)
+	}
+}
+
+// TestMergeKubeconfig_WithDirectlyDisabled tests merging only primary context
+func TestMergeKubeconfig_WithDirectlyDisabled(t *testing.T) {
+	target := api.NewConfig()
+	source := createTestSourceKubeconfig()
+
+	MergeKubeconfig(target, source, "demo-cluster", false)
+
+	// Verify only primary cluster was merged
+	if len(target.Clusters) != 1 {
+		t.Errorf("Expected 1 cluster, got %d", len(target.Clusters))
+	}
+	if target.Clusters["demo-cluster"] == nil {
+		t.Error("Primary cluster should be merged")
+	}
+	if target.Clusters["demo-cluster-node01"] != nil {
+		t.Error("Direct cluster node01 should NOT be merged")
+	}
+	if target.Clusters["demo-cluster-node02"] != nil {
+		t.Error("Direct cluster node02 should NOT be merged")
+	}
+
+	// Verify only primary context was merged
+	if len(target.Contexts) != 1 {
+		t.Errorf("Expected 1 context, got %d", len(target.Contexts))
+	}
+	if target.Contexts["demo-cluster"] == nil {
+		t.Error("Primary context should be merged")
+	}
+
+	// Verify authInfo was merged
+	if len(target.AuthInfos) != 1 {
+		t.Errorf("Expected 1 authInfo, got %d", len(target.AuthInfos))
+	}
+}
+
+// TestMergeKubeconfig_OverwriteExisting tests overwrite behavior
+func TestMergeKubeconfig_OverwriteExisting(t *testing.T) {
+	// Create target with existing entries
+	target := api.NewConfig()
+	target.Clusters["demo-cluster"] = &api.Cluster{
+		Server: "https://old-server.example.com",
+	}
+	target.Contexts["demo-cluster"] = &api.Context{
+		Cluster:  "demo-cluster",
+		AuthInfo: "demo-cluster",
+	}
+	target.AuthInfos["demo-cluster"] = &api.AuthInfo{
+		Token: "old-token",
+	}
+
+	// Create source with new values
+	source := createTestSourceKubeconfig()
+
+	MergeKubeconfig(target, source, "demo-cluster", false)
+
+	// Verify values were overwritten
+	if target.Clusters["demo-cluster"].Server != "https://rancher.example.com/k8s/clusters/c-m-demo" {
+		t.Errorf("Cluster server should be overwritten, got %s", target.Clusters["demo-cluster"].Server)
+	}
+	if target.AuthInfos["demo-cluster"].Token != "kubeconfig-user:demo-token" {
+		t.Errorf("Token should be overwritten, got %s", target.AuthInfos["demo-cluster"].Token)
+	}
+}
+
+// TestMergeKubeconfig_PreservesOtherEntries tests that other entries are preserved
+func TestMergeKubeconfig_PreservesOtherEntries(t *testing.T) {
+	// Create target with existing entries from different cluster
+	target := api.NewConfig()
+	target.Clusters["other-cluster"] = &api.Cluster{
+		Server: "https://other-server.example.com",
+	}
+	target.Contexts["other-cluster"] = &api.Context{
+		Cluster:  "other-cluster",
+		AuthInfo: "other-cluster",
+	}
+	target.AuthInfos["other-cluster"] = &api.AuthInfo{
+		Token: "other-token",
+	}
+
+	source := createTestSourceKubeconfig()
+
+	MergeKubeconfig(target, source, "demo-cluster", true)
+
+	// Verify other entries are preserved
+	if target.Clusters["other-cluster"] == nil {
+		t.Error("Other cluster should be preserved")
+	}
+	if target.Clusters["other-cluster"].Server != "https://other-server.example.com" {
+		t.Error("Other cluster server should not change")
+	}
+	if target.AuthInfos["other-cluster"] == nil {
+		t.Error("Other authInfo should be preserved")
+	}
+	if target.AuthInfos["other-cluster"].Token != "other-token" {
+		t.Error("Other token should not change")
+	}
+
+	// Verify new entries are added
+	if target.Clusters["demo-cluster"] == nil {
+		t.Error("Demo cluster should be added")
+	}
+
+	// Total should be 4 clusters (1 other + 3 from source)
+	if len(target.Clusters) != 4 {
+		t.Errorf("Expected 4 clusters, got %d", len(target.Clusters))
+	}
+}
+
+// TestMergeKubeconfig_NilMaps tests handling of nil maps in target
+func TestMergeKubeconfig_NilMaps(t *testing.T) {
+	// Create target with nil maps (as returned by api.NewConfig() doesn't initialize maps as nil)
+	target := &api.Config{
+		Clusters:  nil,
+		Contexts:  nil,
+		AuthInfos: nil,
+	}
+
+	source := createTestSourceKubeconfig()
+
+	// Should not panic
+	MergeKubeconfig(target, source, "demo-cluster", true)
+
+	// Verify maps were initialized and entries added
+	if target.Clusters == nil {
+		t.Error("Clusters map should be initialized")
+	}
+	if target.Contexts == nil {
+		t.Error("Contexts map should be initialized")
+	}
+	if target.AuthInfos == nil {
+		t.Error("AuthInfos map should be initialized")
+	}
+
+	if len(target.Clusters) != 3 {
+		t.Errorf("Expected 3 clusters, got %d", len(target.Clusters))
+	}
+}
+
+// TestMergeKubeconfig_EmptySource tests handling of empty source
+func TestMergeKubeconfig_EmptySource(t *testing.T) {
+	target := createTestKubeconfig()
+	source := api.NewConfig()
+
+	originalClusters := len(target.Clusters)
+
+	MergeKubeconfig(target, source, "nonexistent", true)
+
+	// Target should be unchanged
+	if len(target.Clusters) != originalClusters {
+		t.Errorf("Target clusters should be unchanged, expected %d, got %d", originalClusters, len(target.Clusters))
+	}
+}
+
+// TestMergeKubeconfig_DirectContextPatternMatching tests correct pattern matching for direct contexts
+func TestMergeKubeconfig_DirectContextPatternMatching(t *testing.T) {
+	target := api.NewConfig()
+
+	// Create source with various context names
+	source := api.NewConfig()
+	source.Clusters["prod"] = &api.Cluster{Server: "https://prod.example.com"}
+	source.Clusters["prod-node1"] = &api.Cluster{Server: "https://prod-node1.example.com"}
+	source.Clusters["production"] = &api.Cluster{Server: "https://production.example.com"} // Should NOT match
+	source.Clusters["prod-"] = &api.Cluster{Server: "https://prod-.example.com"}           // Edge case
+
+	source.Contexts["prod"] = &api.Context{Cluster: "prod", AuthInfo: "prod"}
+	source.Contexts["prod-node1"] = &api.Context{Cluster: "prod-node1", AuthInfo: "prod"}
+	source.Contexts["production"] = &api.Context{Cluster: "production", AuthInfo: "production"} // Different user
+	source.Contexts["prod-"] = &api.Context{Cluster: "prod-", AuthInfo: "prod"}
+
+	source.AuthInfos["prod"] = &api.AuthInfo{Token: "prod-token"}
+	source.AuthInfos["production"] = &api.AuthInfo{Token: "production-token"}
+
+	MergeKubeconfig(target, source, "prod", true)
+
+	// Should match: prod, prod-node1, prod-
+	// Should NOT match: production (doesn't start with "prod-")
+	if target.Contexts["prod"] == nil {
+		t.Error("Primary context 'prod' should be merged")
+	}
+	if target.Contexts["prod-node1"] == nil {
+		t.Error("Direct context 'prod-node1' should be merged")
+	}
+	if target.Contexts["prod-"] == nil {
+		t.Error("Direct context 'prod-' should be merged")
+	}
+	if target.Contexts["production"] != nil {
+		t.Error("Context 'production' should NOT be merged (doesn't match pattern)")
+	}
+
+	// Verify correct count
+	if len(target.Contexts) != 3 {
+		t.Errorf("Expected 3 contexts, got %d", len(target.Contexts))
 	}
 }
