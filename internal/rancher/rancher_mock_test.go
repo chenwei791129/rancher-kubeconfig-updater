@@ -26,6 +26,7 @@ type MockRancherServer struct {
 	mu              sync.RWMutex
 	users           map[string]mockUser
 	clusters        []Cluster
+	clusterConfigs  map[string]MockClusterConfig // cluster ID -> config with direct nodes
 	tokens          map[string]mockToken
 	kubeconfigToken string
 
@@ -49,6 +50,18 @@ type mockToken struct {
 	Expired   bool
 	Enabled   bool
 	Created   time.Time
+}
+
+// MockDirectNode represents a node for Downstream Directly access
+type MockDirectNode struct {
+	Hostname string // e.g., "node01", "master-1"
+	Server   string // e.g., "192.168.1.101:6443" or "k8s.internal.local:6443"
+}
+
+// MockClusterConfig holds extended cluster configuration for mock responses
+type MockClusterConfig struct {
+	DirectNodes []MockDirectNode // Nodes for direct access
+	CACert      string           // CA certificate for direct clusters (base64 encoded)
 }
 
 // apiCall represents a recorded API call for verification
@@ -104,11 +117,22 @@ func WithKubeconfigToken(token string) MockRancherServerOption {
 	}
 }
 
+// WithClusterDirectly configures a cluster with Downstream Directly nodes
+func WithClusterDirectly(clusterID string, nodes []MockDirectNode, caCert string) MockRancherServerOption {
+	return func(s *MockRancherServer) {
+		s.clusterConfigs[clusterID] = MockClusterConfig{
+			DirectNodes: nodes,
+			CACert:      caCert,
+		}
+	}
+}
+
 // NewMockRancherServer creates a new mock Rancher server
 func NewMockRancherServer(opts ...MockRancherServerOption) *MockRancherServer {
 	s := &MockRancherServer{
 		users:           make(map[string]mockUser),
 		clusters:        []Cluster{},
+		clusterConfigs:  make(map[string]MockClusterConfig),
 		tokens:          make(map[string]mockToken),
 		kubeconfigToken: "default-kubeconfig-token:secret123",
 		apiCalls:        []apiCall{},
@@ -301,23 +325,7 @@ func (s *MockRancherServer) handleGenerateKubeconfig(w http.ResponseWriter, r *h
 	}
 
 	// Generate kubeconfig YAML
-	kubeconfig := fmt.Sprintf(`apiVersion: v1
-clusters:
-- cluster:
-    server: %s
-  name: %s
-contexts:
-- context:
-    cluster: %s
-    user: %s
-  name: %s
-current-context: %s
-kind: Config
-users:
-- name: %s
-  user:
-    token: %s
-`, s.server.URL, clusterName, clusterName, clusterName, clusterName, clusterName, clusterName, s.kubeconfigToken)
+	kubeconfig := s.generateKubeconfigYAML(clusterID, clusterName)
 
 	response := struct {
 		Config string `json:"config"`
@@ -329,6 +337,64 @@ users:
 	s.recordCall(r.Method, r.URL.Path, r.URL.RawQuery, r.Header, clusterID, http.StatusOK)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(respBytes)
+}
+
+// generateKubeconfigYAML generates the kubeconfig YAML string
+// If the cluster has Downstream Directly nodes configured, includes them in the output
+func (s *MockRancherServer) generateKubeconfigYAML(clusterID, clusterName string) string {
+	var clusters, contexts strings.Builder
+
+	// Primary cluster (Rancher proxy)
+	clusters.WriteString(fmt.Sprintf(`- cluster:
+    server: %s/k8s/clusters/%s
+  name: %s
+`, s.server.URL, clusterID, clusterName))
+
+	// Primary context
+	contexts.WriteString(fmt.Sprintf(`- context:
+    cluster: %s
+    user: %s
+  name: %s
+`, clusterName, clusterName, clusterName))
+
+	// Check if cluster has Downstream Directly nodes configured
+	if config, exists := s.clusterConfigs[clusterID]; exists && len(config.DirectNodes) > 0 {
+		for _, node := range config.DirectNodes {
+			directClusterName := fmt.Sprintf("%s-%s", clusterName, node.Hostname)
+
+			// Direct cluster entry
+			if config.CACert != "" {
+				clusters.WriteString(fmt.Sprintf(`- cluster:
+    server: https://%s
+    certificate-authority-data: %s
+  name: %s
+`, node.Server, config.CACert, directClusterName))
+			} else {
+				clusters.WriteString(fmt.Sprintf(`- cluster:
+    server: https://%s
+  name: %s
+`, node.Server, directClusterName))
+			}
+
+			// Direct context entry (uses same user as primary)
+			contexts.WriteString(fmt.Sprintf(`- context:
+    cluster: %s
+    user: %s
+  name: %s
+`, directClusterName, clusterName, directClusterName))
+		}
+	}
+
+	return fmt.Sprintf(`apiVersion: v1
+clusters:
+%scontexts:
+%scurrent-context: %s
+kind: Config
+users:
+- name: %s
+  user:
+    token: %s
+`, clusters.String(), contexts.String(), clusterName, clusterName, s.kubeconfigToken)
 }
 
 // handleGetToken handles the get token endpoint
@@ -880,4 +946,133 @@ func TestMockRancherServer_ConcurrentAccess(t *testing.T) {
 	for err := range errors {
 		t.Errorf("Concurrent request failed: %v", err)
 	}
+}
+
+// TestMockRancherServer_DownstreamDirectly tests kubeconfig generation with Downstream Directly nodes
+func TestMockRancherServer_DownstreamDirectly(t *testing.T) {
+	clusters := []Cluster{
+		{ID: "c-m-demo123", Name: "demo-cluster"},
+	}
+	directNodes := []MockDirectNode{
+		{Hostname: "node01", Server: "192.168.1.101:6443"},
+		{Hostname: "node02", Server: "192.168.1.102:6443"},
+	}
+	// Mock CA cert (base64 encoded "mock-ca-cert-data-for-testing")
+	mockCACert := "bW9jay1jYS1jZXJ0LWRhdGEtZm9yLXRlc3Rpbmc="
+
+	mockServer := NewMockRancherServer(
+		WithMockUser("admin", "password", AuthTypeLocal),
+		WithMockClusters(clusters),
+		WithClusterDirectly("c-m-demo123", directNodes, mockCACert),
+		WithKubeconfigToken("kubeconfig-user:mock-token-xxxxx"),
+	)
+	defer mockServer.Close()
+
+	logger := zap.NewNop()
+
+	client, err := NewClient(
+		mockServer.URL(),
+		"admin",
+		"password",
+		AuthTypeLocal,
+		logger,
+		false,
+		WithHTTPClient(mockServer.Client()),
+	)
+	assert.NoError(t, err)
+
+	// Get kubeconfig token (which internally fetches the full kubeconfig)
+	token := client.GetClusterToken("c-m-demo123")
+	assert.NotEmpty(t, token)
+	assert.Equal(t, "kubeconfig-user:mock-token-xxxxx", token)
+
+	// Verify the API was called
+	calls := mockServer.GetAPICalls()
+	var kubeconfigCallFound bool
+	for i := range calls {
+		if strings.Contains(calls[i].Path, "/v3/clusters/") && calls[i].Query == "action=generateKubeconfig" {
+			kubeconfigCallFound = true
+			assert.Equal(t, "POST", calls[i].Method)
+			break
+		}
+	}
+	assert.True(t, kubeconfigCallFound, "Expected generateKubeconfig API call")
+}
+
+// TestMockRancherServer_DownstreamDirectly_KubeconfigContent tests the actual kubeconfig content
+func TestMockRancherServer_DownstreamDirectly_KubeconfigContent(t *testing.T) {
+	clusters := []Cluster{
+		{ID: "c-m-demo456", Name: "test-cluster"},
+	}
+	directNodes := []MockDirectNode{
+		{Hostname: "master-1", Server: "10.0.1.10:6443"},
+		{Hostname: "master-2", Server: "10.0.1.11:6443"},
+		{Hostname: "master-3", Server: "10.0.1.12:6443"},
+	}
+	mockCACert := "dGVzdC1jYS1jZXJ0LWRhdGE="
+
+	mockServer := NewMockRancherServer(
+		WithMockUser("admin", "password", AuthTypeLocal),
+		WithMockClusters(clusters),
+		WithClusterDirectly("c-m-demo456", directNodes, mockCACert),
+		WithKubeconfigToken("kubeconfig-user:test-token"),
+	)
+	defer mockServer.Close()
+
+	// Generate kubeconfig YAML directly for verification
+	kubeconfig := mockServer.generateKubeconfigYAML("c-m-demo456", "test-cluster")
+
+	// Verify primary cluster
+	assert.Contains(t, kubeconfig, "name: test-cluster")
+	assert.Contains(t, kubeconfig, "/k8s/clusters/c-m-demo456")
+
+	// Verify direct clusters
+	assert.Contains(t, kubeconfig, "name: test-cluster-master-1")
+	assert.Contains(t, kubeconfig, "name: test-cluster-master-2")
+	assert.Contains(t, kubeconfig, "name: test-cluster-master-3")
+	assert.Contains(t, kubeconfig, "https://10.0.1.10:6443")
+	assert.Contains(t, kubeconfig, "https://10.0.1.11:6443")
+	assert.Contains(t, kubeconfig, "https://10.0.1.12:6443")
+
+	// Verify CA cert is included for direct clusters
+	assert.Contains(t, kubeconfig, "certificate-authority-data: dGVzdC1jYS1jZXJ0LWRhdGE=")
+
+	// Verify contexts reference the same user
+	assert.Contains(t, kubeconfig, "user: test-cluster")
+
+	// Verify token
+	assert.Contains(t, kubeconfig, "token: kubeconfig-user:test-token")
+}
+
+// TestMockRancherServer_NoDownstreamDirectly tests kubeconfig without direct nodes
+func TestMockRancherServer_NoDownstreamDirectly(t *testing.T) {
+	clusters := []Cluster{
+		{ID: "c-m-simple", Name: "simple-cluster"},
+	}
+
+	mockServer := NewMockRancherServer(
+		WithMockUser("admin", "password", AuthTypeLocal),
+		WithMockClusters(clusters),
+		// No WithClusterDirectly - cluster has no direct nodes
+		WithKubeconfigToken("kubeconfig-user:simple-token"),
+	)
+	defer mockServer.Close()
+
+	// Generate kubeconfig YAML directly for verification
+	kubeconfig := mockServer.generateKubeconfigYAML("c-m-simple", "simple-cluster")
+
+	// Verify primary cluster exists
+	assert.Contains(t, kubeconfig, "name: simple-cluster")
+
+	// Verify NO direct clusters (no certificate-authority-data for direct access)
+	assert.NotContains(t, kubeconfig, "simple-cluster-node")
+	assert.NotContains(t, kubeconfig, "simple-cluster-master")
+
+	// Count cluster entries (should be only 1)
+	clusterCount := strings.Count(kubeconfig, "- cluster:")
+	assert.Equal(t, 1, clusterCount, "Expected only 1 cluster entry")
+
+	// Count context entries (should be only 1)
+	contextCount := strings.Count(kubeconfig, "- context:")
+	assert.Equal(t, 1, contextCount, "Expected only 1 context entry")
 }
