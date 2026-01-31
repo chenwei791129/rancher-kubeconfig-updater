@@ -5,12 +5,12 @@ import (
 	"os"
 	"rancher-kubeconfig-updater/internal/config"
 	"rancher-kubeconfig-updater/internal/kubeconfig"
+	"rancher-kubeconfig-updater/internal/logger"
 	"rancher-kubeconfig-updater/internal/rancher"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 var (
@@ -52,18 +52,10 @@ func NewRootCmd() *cobra.Command {
 func run(cmd *cobra.Command, args []string) {
 	var err error
 
-	// Initialize logger with custom config
-	logConfig := zap.NewProductionConfig()
-	logConfig.Encoding = "console"
-	logConfig.DisableCaller = true
-	logConfig.DisableStacktrace = true
-	logConfig.EncoderConfig.TimeKey = "time"
-	logConfig.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	logConfig.EncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
-	logConfig.EncoderConfig.ConsoleSeparator = " | "
-	logger, _ := logConfig.Build()
+	// Initialize logger with pipe-delimited format
+	zapLogger := logger.NewLogger()
 	defer func() {
-		_ = logger.Sync()
+		_ = zapLogger.Sync()
 	}()
 
 	// Get configuration with priority: Flag > Env > Default
@@ -77,12 +69,12 @@ func run(cmd *cobra.Command, args []string) {
 
 	// Log dry-run mode if enabled
 	if dryRun {
-		logger.Info("[DRY-RUN] Mode enabled - no changes will be made to kubeconfig")
+		zapLogger.Info("[DRY-RUN] Mode enabled - no changes will be made to kubeconfig")
 	}
 
 	rancherPassword, err := config.GetPassword(cmd, "password", "RANCHER_PASSWORD")
 	if err != nil {
-		logger.Error("Failed to read password", zap.Error(err))
+		zapLogger.Error("Failed to read password", zap.Error(err))
 		return
 	}
 
@@ -90,13 +82,13 @@ func run(cmd *cobra.Command, args []string) {
 	// Empty string will automatically resolve to ~/.kube/config on Unix/macOS and %USERPROFILE%\.kube\config on Windows
 	kubecfg, err := kubeconfig.LoadKubeconfig(configPath)
 	if err != nil {
-		logger.Error("Failed to load kubeconfig file", zap.Error(err))
+		zapLogger.Error("Failed to load kubeconfig file", zap.Error(err))
 		return
 	}
 
 	// Check if this is a new config (no users means it's newly created)
 	if len(kubecfg.AuthInfos) == 0 && len(kubecfg.Clusters) == 0 && len(kubecfg.Contexts) == 0 {
-		logger.Info("Creating new kubeconfig file at default location")
+		zapLogger.Info("Creating new kubeconfig file at default location")
 	}
 
 	// Determine auth type
@@ -106,25 +98,25 @@ func run(cmd *cobra.Command, args []string) {
 	} else if rancherAuthType == "local" {
 		authType = rancher.AuthTypeLocal
 	} else if rancherAuthType != "" {
-		logger.Error("Invalid auth-type value. Must be 'local' or 'ldap'")
+		zapLogger.Error("Invalid auth-type value. Must be 'local' or 'ldap'")
 		return
 	}
 
-	client, err := rancher.NewClient(rancherURL, rancherUsername, rancherPassword, authType, logger, insecureSkipTLSVerify)
+	client, err := rancher.NewClient(rancherURL, rancherUsername, rancherPassword, authType, zapLogger, insecureSkipTLSVerify)
 	if err != nil {
-		logger.Error("Failed to authenticate with Rancher", zap.Error(err))
+		zapLogger.Error("Failed to authenticate with Rancher", zap.Error(err))
 		return
 	}
 
 	clusters, err := client.ListClusters()
 	if err != nil {
-		logger.Error("Failed to retrieve cluster list from Rancher", zap.Error(err))
+		zapLogger.Error("Failed to retrieve cluster list from Rancher", zap.Error(err))
 		return
 	}
 
 	// Filter clusters if --cluster flag is specified
 	if clusterFlag != "" {
-		clusters = filterClusters(clusters, clusterFlag, logger)
+		clusters = filterClusters(clusters, clusterFlag, zapLogger)
 	}
 
 	// Track dry-run statistics
@@ -141,7 +133,7 @@ func run(cmd *cobra.Command, args []string) {
 		decision := client.DetermineTokenRegeneration(currentToken, forceRefresh, thresholdDays, v.Name)
 
 		// Log decision and skip if regeneration not needed
-		logTokenDecision(logger, decision, v.Name, dryRun)
+		logTokenDecision(zapLogger, decision, v.Name, dryRun)
 
 		if !decision.ShouldRegenerate {
 			clustersToSkip++
@@ -157,30 +149,30 @@ func run(cmd *cobra.Command, args []string) {
 
 		// Regenerate token
 		clusterToken := client.GetClusterToken(v.ID)
-		err = kubeconfig.UpdateTokenByName(kubecfg, v.ID, v.Name, clusterToken, rancherURL, autoCreate, logger)
+		err = kubeconfig.UpdateTokenByName(kubecfg, v.ID, v.Name, clusterToken, rancherURL, autoCreate, zapLogger)
 		if err != nil {
 			// Error is already logged in UpdateTokenByName
 			continue
 		}
-		logger.Info("Successfully updated kubeconfig token for cluster: " + v.Name)
+		zapLogger.Info("Successfully updated kubeconfig token for cluster: " + v.Name)
 	}
 
 	// Skip saving in dry-run mode and show summary
 	if dryRun {
-		logger.Info("[DRY-RUN] Summary",
+		zapLogger.Info("[DRY-RUN] Summary",
 			zap.Int("clustersToUpdate", clustersToUpdate),
 			zap.Int("clustersToSkip", clustersToSkip))
-		logger.Info("[DRY-RUN] No changes were made to kubeconfig")
+		zapLogger.Info("[DRY-RUN] No changes were made to kubeconfig")
 		return
 	}
 
-	err = kubeconfig.SaveKubeconfig(kubecfg, configPath, logger)
+	err = kubeconfig.SaveKubeconfig(kubecfg, configPath, zapLogger)
 	if err != nil {
-		logger.Error("Failed to save kubeconfig file", zap.Error(err))
+		zapLogger.Error("Failed to save kubeconfig file", zap.Error(err))
 		return
 	}
 
-	logger.Info("All cluster tokens have been updated successfully")
+	zapLogger.Info("All cluster tokens have been updated successfully")
 }
 
 // logTokenDecision logs the token regeneration decision with consistent formatting
