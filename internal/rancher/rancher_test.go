@@ -178,6 +178,126 @@ users:
 	assert.Equal(t, "kubeconfig-token-xyz123", token)
 }
 
+// TestGetClusterKubeconfig_Success tests retrieving full kubeconfig with direct contexts
+func TestGetClusterKubeconfig_Success(t *testing.T) {
+	// Create mock response with Downstream Directly contexts
+	mockClient := &MockHTTPClient{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			assert.Contains(t, req.URL.Path, "/v3/clusters/c-m-demo")
+			assert.Equal(t, "generateKubeconfig", req.URL.Query().Get("action"))
+
+			// Kubeconfig with primary and direct contexts
+			kubeconfig := `apiVersion: v1
+clusters:
+- cluster:
+    server: https://rancher.example.com/k8s/clusters/c-m-demo
+  name: demo-cluster
+- cluster:
+    server: https://192.168.1.101:6443
+    certificate-authority-data: dGVzdC1jYS1kYXRh
+  name: demo-cluster-node01
+- cluster:
+    server: https://192.168.1.102:6443
+    certificate-authority-data: dGVzdC1jYS1kYXRh
+  name: demo-cluster-node02
+contexts:
+- context:
+    cluster: demo-cluster
+    user: demo-cluster
+  name: demo-cluster
+- context:
+    cluster: demo-cluster-node01
+    user: demo-cluster
+  name: demo-cluster-node01
+- context:
+    cluster: demo-cluster-node02
+    user: demo-cluster
+  name: demo-cluster-node02
+current-context: demo-cluster
+kind: Config
+users:
+- name: demo-cluster
+  user:
+    token: kubeconfig-user:demo-token-xyz
+`
+			type response struct {
+				Config string `json:"config"`
+			}
+			resp := response{Config: kubeconfig}
+			jsonBytes, _ := json.Marshal(resp)
+
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBuffer(jsonBytes)),
+			}, nil
+		},
+	}
+
+	logger := zap.NewNop()
+	client := &Client{
+		token:      "test-token",
+		httpClient: mockClient,
+		BaseURL:    "https://rancher.example.com",
+		logger:     logger,
+	}
+
+	kubeconfig, err := client.GetClusterKubeconfig("c-m-demo")
+
+	assert.NoError(t, err)
+	assert.NotNil(t, kubeconfig)
+
+	// Verify primary cluster
+	assert.Contains(t, kubeconfig.Clusters, "demo-cluster")
+	assert.Equal(t, "https://rancher.example.com/k8s/clusters/c-m-demo", kubeconfig.Clusters["demo-cluster"].Server)
+
+	// Verify direct clusters
+	assert.Contains(t, kubeconfig.Clusters, "demo-cluster-node01")
+	assert.Contains(t, kubeconfig.Clusters, "demo-cluster-node02")
+	assert.Equal(t, "https://192.168.1.101:6443", kubeconfig.Clusters["demo-cluster-node01"].Server)
+	assert.Equal(t, "https://192.168.1.102:6443", kubeconfig.Clusters["demo-cluster-node02"].Server)
+
+	// Verify contexts
+	assert.Len(t, kubeconfig.Contexts, 3)
+	assert.Contains(t, kubeconfig.Contexts, "demo-cluster")
+	assert.Contains(t, kubeconfig.Contexts, "demo-cluster-node01")
+	assert.Contains(t, kubeconfig.Contexts, "demo-cluster-node02")
+
+	// Verify all contexts reference the same user
+	for _, ctx := range kubeconfig.Contexts {
+		assert.Equal(t, "demo-cluster", ctx.AuthInfo)
+	}
+
+	// Verify user/token
+	assert.Contains(t, kubeconfig.AuthInfos, "demo-cluster")
+	assert.Equal(t, "kubeconfig-user:demo-token-xyz", kubeconfig.AuthInfos["demo-cluster"].Token)
+}
+
+// TestGetClusterKubeconfig_Error tests error handling
+func TestGetClusterKubeconfig_Error(t *testing.T) {
+	mockClient := &MockHTTPClient{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"error": "cluster not found"}`)),
+			}, nil
+		},
+	}
+
+	logger := zap.NewNop()
+	client := &Client{
+		token:      "test-token",
+		httpClient: mockClient,
+		BaseURL:    "https://rancher.example.com",
+		logger:     logger,
+	}
+
+	kubeconfig, err := client.GetClusterKubeconfig("non-existent")
+
+	assert.Error(t, err)
+	assert.Nil(t, kubeconfig)
+	assert.Contains(t, err.Error(), "failed to get kubeconfig")
+}
+
 // TestGetRancherToken_Local tests Local authentication
 func TestGetRancherToken_Local(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
