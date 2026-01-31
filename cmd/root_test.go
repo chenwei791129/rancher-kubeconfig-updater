@@ -462,4 +462,108 @@ func TestNewRootCmd_DryRunFlagInitialization(t *testing.T) {
 	assert.True(t, dryRun)
 }
 
+// TestWithDirectlyFlag_FlagRegistered tests that the --with-directly flag is properly registered
+func TestWithDirectlyFlag_FlagRegistered(t *testing.T) {
+	cmd := NewRootCmd()
 
+	// Test that the flag exists
+	withDirectlyFlag := cmd.Flags().Lookup("with-directly")
+	assert.NotNil(t, withDirectlyFlag, "with-directly flag should be registered")
+
+	// Test default value is false
+	assert.Equal(t, "false", withDirectlyFlag.DefValue, "with-directly flag should default to false")
+
+	// Test usage text
+	assert.Contains(t, withDirectlyFlag.Usage, "Downstream Directly", "with-directly flag usage should mention Downstream Directly")
+}
+
+// TestWithDirectlyFlag_AcceptsValue tests that the --with-directly flag accepts a boolean value
+func TestWithDirectlyFlag_AcceptsValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		expected bool
+	}{
+		{
+			name:     "WithDirectlyEnabled",
+			args:     []string{"--with-directly"},
+			expected: true,
+		},
+		{
+			name:     "WithDirectlyExplicitTrue",
+			args:     []string{"--with-directly=true"},
+			expected: true,
+		},
+		{
+			name:     "WithDirectlyExplicitFalse",
+			args:     []string{"--with-directly=false"},
+			expected: false,
+		},
+		{
+			name:     "WithDirectlyNotSpecified",
+			args:     []string{},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := NewRootCmd()
+			cmd.SetArgs(tt.args)
+
+			err := cmd.ParseFlags(tt.args)
+			assert.NoError(t, err, "parsing flags should not error")
+
+			withDirectlyValue, err := cmd.Flags().GetBool("with-directly")
+			assert.NoError(t, err, "getting with-directly flag value should not error")
+			assert.Equal(t, tt.expected, withDirectlyValue, "with-directly flag should have the expected value")
+		})
+	}
+}
+
+// TestWithDirectlyFlag_CombinedWithOtherFlags tests that --with-directly works with other flags
+func TestWithDirectlyFlag_CombinedWithOtherFlags(t *testing.T) {
+	cmd := NewRootCmd()
+	args := []string{
+		"--with-directly",
+		"--config", "/tmp/test-kubeconfig",
+		"--auto-create",
+		"--cluster", "prod,staging",
+		"--dry-run",
+	}
+
+	err := cmd.ParseFlags(args)
+	assert.NoError(t, err, "parsing combined flags should not error")
+
+	// Verify with-directly flag
+	withDirectlyValue, _ := cmd.Flags().GetBool("with-directly")
+	assert.True(t, withDirectlyValue)
+
+	// Verify other flags are still working
+	configValue, _ := cmd.Flags().GetString("config")
+	assert.Equal(t, "/tmp/test-kubeconfig", configValue)
+
+	autoCreateValue, _ := cmd.Flags().GetBool("auto-create")
+	assert.True(t, autoCreateValue)
+
+	clusterValue, _ := cmd.Flags().GetString("cluster")
+	assert.Equal(t, "prod,staging", clusterValue)
+
+	dryRunValue, _ := cmd.Flags().GetBool("dry-run")
+	assert.True(t, dryRunValue)
+}
+
+// TestNewRootCmd_WithDirectlyFlagInitialization tests that withDirectly variable is properly initialized
+func TestNewRootCmd_WithDirectlyFlagInitialization(t *testing.T) {
+	// Reset withDirectly to ensure clean state
+	withDirectly = false
+
+	cmd := NewRootCmd()
+	args := []string{"--with-directly"}
+
+	err := cmd.ParseFlags(args)
+	assert.NoError(t, err)
+
+	// After parsing, the global withDirectly variable should be set
+	assert.True(t, withDirectly)
+}

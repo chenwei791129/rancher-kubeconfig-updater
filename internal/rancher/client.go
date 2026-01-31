@@ -9,7 +9,8 @@ import (
 	"net/http"
 
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/clientcmd/api"
 )
 
 // HTTPClient 介面用於抽象化 HTTP 呼叫，使其可測試
@@ -113,44 +114,81 @@ func (c *Client) ListClusters() (Clusters, error) {
 	return clusters, nil
 }
 
-func (c *Client) GetClusterToken(clusterID string) string {
-	type KubeConfigToken struct {
-		Token string `yaml:"token"`
-	}
-
-	type KubeConfigUser struct {
-		User KubeConfigToken `yaml:"user"`
-	}
-
-	type Kubeconfig struct {
-		Users []KubeConfigUser `yaml:"users"`
-	}
-
-	type getClusterTokenResponse struct {
+// GetClusterKubeconfig retrieves the full kubeconfig for a cluster from Rancher API.
+// The returned *api.Config includes the primary Rancher proxy context and any
+// Downstream Directly contexts if the cluster has them configured.
+func (c *Client) GetClusterKubeconfig(clusterID string) (*api.Config, error) {
+	type getClusterKubeconfigResponse struct {
 		Config string `json:"config"`
 	}
+
 	url := fmt.Sprintf("%s/v3/clusters/%s?action=generateKubeconfig", c.BaseURL, clusterID)
 	req, _ := http.NewRequest("POST", url, nil)
 	req.Header.Set("Authorization", "Bearer "+c.token)
 
 	body, respCode, err := doRequest(c.httpClient, req)
-	if err != nil || respCode != http.StatusOK {
-		return ""
+	if err != nil {
+		return nil, fmt.Errorf("failed to get kubeconfig: %w", err)
+	}
+	if respCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get kubeconfig, status %d: %s", respCode, string(body))
 	}
 
-	var result getClusterTokenResponse
+	var result getClusterKubeconfigResponse
 	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse kubeconfig response: %w", err)
+	}
+
+	// Parse the kubeconfig YAML using client-go
+	kubeconfig, err := clientcmd.Load([]byte(result.Config))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse kubeconfig YAML: %w", err)
+	}
+
+	return kubeconfig, nil
+}
+
+// GetClusterToken retrieves only the token from a cluster's kubeconfig.
+// This is a convenience method that calls GetClusterKubeconfig and extracts the token.
+// Returns empty string if the token cannot be retrieved.
+func (c *Client) GetClusterToken(clusterID string) string {
+	kubeconfig, err := c.GetClusterKubeconfig(clusterID)
+	if err != nil {
 		return ""
 	}
 
-	// fmt.Printf("[debug] config: %s", result.Config)
+	return extractTokenFromKubeconfig(kubeconfig)
+}
 
-	var kubeconfig Kubeconfig
-	if err := yaml.Unmarshal([]byte(result.Config), &kubeconfig); err != nil {
+// extractTokenFromKubeconfig extracts the token from a kubeconfig using CurrentContext chain.
+// This ensures deterministic behavior by following: CurrentContext -> Context -> AuthInfo -> Token
+// Returns empty string if the token cannot be extracted.
+func extractTokenFromKubeconfig(kubeconfig *api.Config) string {
+	if kubeconfig == nil {
 		return ""
 	}
 
-	return kubeconfig.Users[0].User.Token
+	// Use CurrentContext chain for deterministic extraction
+	currentContextName := kubeconfig.CurrentContext
+	if currentContextName == "" {
+		return ""
+	}
+
+	ctx, ok := kubeconfig.Contexts[currentContextName]
+	if !ok || ctx == nil {
+		return ""
+	}
+
+	if ctx.AuthInfo == "" {
+		return ""
+	}
+
+	authInfo, ok := kubeconfig.AuthInfos[ctx.AuthInfo]
+	if !ok || authInfo == nil {
+		return ""
+	}
+
+	return authInfo.Token
 }
 
 func doRequest(client HTTPClient, req *http.Request) ([]byte, int, error) {

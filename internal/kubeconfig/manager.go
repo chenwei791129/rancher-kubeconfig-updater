@@ -40,7 +40,7 @@ func LoadKubeconfig(path string) (*api.Config, error) {
 		}
 		loadingRules.ExplicitPath = expandedPath
 	}
-	
+
 	// Get the actual file path we'll use (respects KUBECONFIG, precedence, etc.)
 	targetPath := loadingRules.GetDefaultFilename()
 
@@ -105,6 +105,85 @@ func UpdateTokenByName(c *api.Config, clusterID, clusterName, token, rancherURL 
 	return fmt.Errorf("user %s not found in kubeconfig", clusterName)
 }
 
+// MergeKubeconfig merges source kubeconfig into target for a specific cluster.
+// When withDirectly is true, includes all contexts (proxy + Downstream Directly).
+// When withDirectly is false, only includes the primary proxy context.
+// Existing entries with the same name are overwritten.
+//
+// The function identifies direct contexts by checking if the context name
+// starts with "{clusterName}-" prefix.
+func MergeKubeconfig(target, source *api.Config, clusterName string, withDirectly bool) {
+	// Initialize maps if nil
+	if target.Clusters == nil {
+		target.Clusters = make(map[string]*api.Cluster)
+	}
+	if target.Contexts == nil {
+		target.Contexts = make(map[string]*api.Context)
+	}
+	if target.AuthInfos == nil {
+		target.AuthInfos = make(map[string]*api.AuthInfo)
+	}
+
+	// Determine which contexts to merge
+	directPrefix := clusterName + "-"
+
+	for ctxName, ctx := range source.Contexts {
+		// Check if this context should be merged
+		isPrimary := ctxName == clusterName
+		isDirect := strings.HasPrefix(ctxName, directPrefix)
+
+		if isPrimary || (withDirectly && isDirect) {
+			// Merge context
+			target.Contexts[ctxName] = ctx
+
+			// Merge associated cluster
+			if cluster, exists := source.Clusters[ctx.Cluster]; exists {
+				target.Clusters[ctx.Cluster] = cluster
+			}
+
+			// Merge associated authInfo
+			if authInfo, exists := source.AuthInfos[ctx.AuthInfo]; exists {
+				target.AuthInfos[ctx.AuthInfo] = authInfo
+			}
+		}
+	}
+}
+
+// ExtractTokenFromKubeconfig extracts the token from a kubeconfig using CurrentContext chain.
+// This ensures deterministic behavior by following: CurrentContext -> Context -> AuthInfo -> Token
+// Returns the token and true if successfully extracted, or empty string and false otherwise.
+func ExtractTokenFromKubeconfig(kubeconfig *api.Config) (string, bool) {
+	if kubeconfig == nil {
+		return "", false
+	}
+
+	// Use CurrentContext chain for deterministic extraction
+	currentContextName := kubeconfig.CurrentContext
+	if currentContextName == "" {
+		return "", false
+	}
+
+	ctx, ok := kubeconfig.Contexts[currentContextName]
+	if !ok || ctx == nil {
+		return "", false
+	}
+
+	if ctx.AuthInfo == "" {
+		return "", false
+	}
+
+	authInfo, ok := kubeconfig.AuthInfos[ctx.AuthInfo]
+	if !ok || authInfo == nil {
+		return "", false
+	}
+
+	if authInfo.Token == "" {
+		return "", false
+	}
+
+	return authInfo.Token, true
+}
+
 // SaveKubeconfig saves a kubeconfig file using the following precedence order:
 //  1. Explicit path parameter (if provided) - highest priority
 //  2. KUBECONFIG environment variable (if set) - handles multiple files
@@ -132,7 +211,7 @@ func SaveKubeconfig(c *api.Config, path string, logger *zap.Logger) error {
 		}
 		loadingRules.ExplicitPath = expandedPath
 	}
-	
+
 	// Get the actual file path we'll use (respects KUBECONFIG, precedence, etc.)
 	targetPath := loadingRules.GetDefaultFilename()
 

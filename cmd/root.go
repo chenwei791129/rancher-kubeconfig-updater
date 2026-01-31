@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
+	"k8s.io/client-go/tools/clientcmd/api"
 )
 
 var (
@@ -24,6 +25,7 @@ var (
 	thresholdDays         int
 	forceRefresh          bool
 	dryRun                bool
+	withDirectly          bool
 )
 
 func NewRootCmd() *cobra.Command {
@@ -45,6 +47,7 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.Flags().IntVar(&thresholdDays, "threshold-days", 30, "Expiration threshold in days")
 	rootCmd.Flags().BoolVar(&forceRefresh, "force-refresh", false, "Bypass expiration checks and force regeneration")
 	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview changes without modifying kubeconfig")
+	rootCmd.Flags().BoolVar(&withDirectly, "with-directly", false, "Include Downstream Directly contexts for direct cluster access")
 
 	return rootCmd
 }
@@ -66,10 +69,16 @@ func run(cmd *cobra.Command, args []string) {
 	thresholdDays := config.GetInt(cmd, "threshold-days", "TOKEN_THRESHOLD_DAYS")
 	forceRefresh := config.GetBool(cmd, "force-refresh", "FORCE_REFRESH")
 	dryRun := config.GetBool(cmd, "dry-run", "DRY_RUN")
+	withDirectly := config.GetBool(cmd, "with-directly", "WITH_DIRECTLY")
 
 	// Log dry-run mode if enabled
 	if dryRun {
 		zapLogger.Info("[DRY-RUN] Mode enabled - no changes will be made to kubeconfig")
+	}
+
+	// Log with-directly mode if enabled
+	if withDirectly {
+		zapLogger.Info("Downstream Directly mode enabled - will include direct cluster contexts")
 	}
 
 	rancherPassword, err := config.GetPassword(cmd, "password", "RANCHER_PASSWORD")
@@ -147,14 +156,48 @@ func run(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		// Regenerate token
-		clusterToken := client.GetClusterToken(v.ID)
-		err = kubeconfig.UpdateTokenByName(kubecfg, v.ID, v.Name, clusterToken, rancherURL, autoCreate, zapLogger)
+		// Get full kubeconfig from Rancher (includes Downstream Directly contexts if available)
+		clusterKubeconfig, err := client.GetClusterKubeconfig(v.ID)
 		if err != nil {
-			// Error is already logged in UpdateTokenByName
+			zapLogger.Error("Failed to get kubeconfig for cluster",
+				zap.String("cluster", v.Name),
+				zap.Error(err))
 			continue
 		}
-		zapLogger.Info("Successfully updated kubeconfig token for cluster: " + v.Name)
+
+		// Check if we should use the new merge approach or legacy approach
+		if withDirectly || autoCreate {
+			// Use MergeKubeconfig for new approach (supports Downstream Directly)
+			kubeconfig.MergeKubeconfig(kubecfg, clusterKubeconfig, v.Name, withDirectly)
+			if withDirectly {
+				// Count direct contexts for logging
+				directCount := countDirectContexts(clusterKubeconfig, v.Name)
+				if directCount > 0 {
+					zapLogger.Info("Successfully updated kubeconfig with direct contexts",
+						zap.String("cluster", v.Name),
+						zap.Int("directContexts", directCount))
+				} else {
+					zapLogger.Info("Successfully updated kubeconfig token for cluster: " + v.Name)
+				}
+			} else {
+				zapLogger.Info("Successfully updated kubeconfig token for cluster: " + v.Name)
+			}
+		} else {
+			// Legacy approach: deterministically extract token from CurrentContext chain
+			token, ok := kubeconfig.ExtractTokenFromKubeconfig(clusterKubeconfig)
+			if !ok {
+				zapLogger.Error("Failed to extract token from kubeconfig",
+					zap.String("cluster", v.Name),
+					zap.String("reason", "empty or invalid CurrentContext/AuthInfo chain"))
+				continue
+			}
+			err = kubeconfig.UpdateTokenByName(kubecfg, v.ID, v.Name, token, rancherURL, autoCreate, zapLogger)
+			if err != nil {
+				// Error is already logged in UpdateTokenByName
+				continue
+			}
+			zapLogger.Info("Successfully updated kubeconfig token for cluster: " + v.Name)
+		}
 	}
 
 	// Skip saving in dry-run mode and show summary
@@ -303,4 +346,17 @@ func filterClusters(clusters rancher.Clusters, clusterFilter string, logger *zap
 	}
 
 	return filteredClusters
+}
+
+// countDirectContexts counts the number of Downstream Directly contexts in a kubeconfig
+// Direct contexts are identified by having a name that starts with "{clusterName}-"
+func countDirectContexts(cfg *api.Config, clusterName string) int {
+	count := 0
+	prefix := clusterName + "-"
+	for ctxName := range cfg.Contexts {
+		if strings.HasPrefix(ctxName, prefix) {
+			count++
+		}
+	}
+	return count
 }
