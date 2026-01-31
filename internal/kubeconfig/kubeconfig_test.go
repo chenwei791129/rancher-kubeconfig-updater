@@ -1545,3 +1545,130 @@ func TestMergeKubeconfig_DirectContextPatternMatching(t *testing.T) {
 		t.Errorf("Expected 3 contexts, got %d", len(target.Contexts))
 	}
 }
+
+// TestExtractTokenFromKubeconfig tests the ExtractTokenFromKubeconfig function
+func TestExtractTokenFromKubeconfig(t *testing.T) {
+	tests := []struct {
+		name          string
+		kubeconfig    *api.Config
+		expectedToken string
+		expectedOK    bool
+	}{
+		{
+			name:          "nil kubeconfig",
+			kubeconfig:    nil,
+			expectedToken: "",
+			expectedOK:    false,
+		},
+		{
+			name: "empty CurrentContext",
+			kubeconfig: &api.Config{
+				CurrentContext: "",
+				Contexts:       map[string]*api.Context{"test": {AuthInfo: "test"}},
+				AuthInfos:      map[string]*api.AuthInfo{"test": {Token: "test-token"}},
+			},
+			expectedToken: "",
+			expectedOK:    false,
+		},
+		{
+			name: "CurrentContext not found in Contexts",
+			kubeconfig: &api.Config{
+				CurrentContext: "missing",
+				Contexts:       map[string]*api.Context{"test": {AuthInfo: "test"}},
+				AuthInfos:      map[string]*api.AuthInfo{"test": {Token: "test-token"}},
+			},
+			expectedToken: "",
+			expectedOK:    false,
+		},
+		{
+			name: "nil Context entry",
+			kubeconfig: &api.Config{
+				CurrentContext: "test",
+				Contexts:       map[string]*api.Context{"test": nil},
+				AuthInfos:      map[string]*api.AuthInfo{"test": {Token: "test-token"}},
+			},
+			expectedToken: "",
+			expectedOK:    false,
+		},
+		{
+			name: "empty AuthInfo in Context",
+			kubeconfig: &api.Config{
+				CurrentContext: "test",
+				Contexts:       map[string]*api.Context{"test": {AuthInfo: ""}},
+				AuthInfos:      map[string]*api.AuthInfo{"test": {Token: "test-token"}},
+			},
+			expectedToken: "",
+			expectedOK:    false,
+		},
+		{
+			name: "AuthInfo not found",
+			kubeconfig: &api.Config{
+				CurrentContext: "test",
+				Contexts:       map[string]*api.Context{"test": {AuthInfo: "missing"}},
+				AuthInfos:      map[string]*api.AuthInfo{"test": {Token: "test-token"}},
+			},
+			expectedToken: "",
+			expectedOK:    false,
+		},
+		{
+			name: "nil AuthInfo entry",
+			kubeconfig: &api.Config{
+				CurrentContext: "test",
+				Contexts:       map[string]*api.Context{"test": {AuthInfo: "test"}},
+				AuthInfos:      map[string]*api.AuthInfo{"test": nil},
+			},
+			expectedToken: "",
+			expectedOK:    false,
+		},
+		{
+			name: "empty token",
+			kubeconfig: &api.Config{
+				CurrentContext: "test",
+				Contexts:       map[string]*api.Context{"test": {AuthInfo: "test"}},
+				AuthInfos:      map[string]*api.AuthInfo{"test": {Token: ""}},
+			},
+			expectedToken: "",
+			expectedOK:    false,
+		},
+		{
+			name: "successful extraction",
+			kubeconfig: &api.Config{
+				CurrentContext: "production",
+				Contexts:       map[string]*api.Context{"production": {AuthInfo: "production-user"}},
+				AuthInfos:      map[string]*api.AuthInfo{"production-user": {Token: "kubeconfig-user:abc123"}},
+			},
+			expectedToken: "kubeconfig-user:abc123",
+			expectedOK:    true,
+		},
+		{
+			name: "multiple contexts - extracts from CurrentContext",
+			kubeconfig: &api.Config{
+				CurrentContext: "staging",
+				Contexts: map[string]*api.Context{
+					"production": {AuthInfo: "prod-user"},
+					"staging":    {AuthInfo: "staging-user"},
+					"dev":        {AuthInfo: "dev-user"},
+				},
+				AuthInfos: map[string]*api.AuthInfo{
+					"prod-user":    {Token: "prod-token"},
+					"staging-user": {Token: "staging-token"},
+					"dev-user":     {Token: "dev-token"},
+				},
+			},
+			expectedToken: "staging-token",
+			expectedOK:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			token, ok := ExtractTokenFromKubeconfig(tt.kubeconfig)
+			if token != tt.expectedToken {
+				t.Errorf("ExtractTokenFromKubeconfig() token = %v, want %v", token, tt.expectedToken)
+			}
+			if ok != tt.expectedOK {
+				t.Errorf("ExtractTokenFromKubeconfig() ok = %v, want %v", ok, tt.expectedOK)
+			}
+		})
+	}
+}

@@ -157,14 +157,38 @@ func (c *Client) GetClusterToken(clusterID string) string {
 		return ""
 	}
 
-	// Extract token from the first user in the kubeconfig
-	for _, authInfo := range kubeconfig.AuthInfos {
-		if authInfo.Token != "" {
-			return authInfo.Token
-		}
+	return extractTokenFromKubeconfig(kubeconfig)
+}
+
+// extractTokenFromKubeconfig extracts the token from a kubeconfig using CurrentContext chain.
+// This ensures deterministic behavior by following: CurrentContext -> Context -> AuthInfo -> Token
+// Returns empty string if the token cannot be extracted.
+func extractTokenFromKubeconfig(kubeconfig *api.Config) string {
+	if kubeconfig == nil {
+		return ""
 	}
 
-	return ""
+	// Use CurrentContext chain for deterministic extraction
+	currentContextName := kubeconfig.CurrentContext
+	if currentContextName == "" {
+		return ""
+	}
+
+	ctx, ok := kubeconfig.Contexts[currentContextName]
+	if !ok || ctx == nil {
+		return ""
+	}
+
+	if ctx.AuthInfo == "" {
+		return ""
+	}
+
+	authInfo, ok := kubeconfig.AuthInfos[ctx.AuthInfo]
+	if !ok || authInfo == nil {
+		return ""
+	}
+
+	return authInfo.Token
 }
 
 func doRequest(client HTTPClient, req *http.Request) ([]byte, int, error) {

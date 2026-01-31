@@ -149,6 +149,41 @@ func MergeKubeconfig(target, source *api.Config, clusterName string, withDirectl
 	}
 }
 
+// ExtractTokenFromKubeconfig extracts the token from a kubeconfig using CurrentContext chain.
+// This ensures deterministic behavior by following: CurrentContext -> Context -> AuthInfo -> Token
+// Returns the token and true if successfully extracted, or empty string and false otherwise.
+func ExtractTokenFromKubeconfig(kubeconfig *api.Config) (string, bool) {
+	if kubeconfig == nil {
+		return "", false
+	}
+
+	// Use CurrentContext chain for deterministic extraction
+	currentContextName := kubeconfig.CurrentContext
+	if currentContextName == "" {
+		return "", false
+	}
+
+	ctx, ok := kubeconfig.Contexts[currentContextName]
+	if !ok || ctx == nil {
+		return "", false
+	}
+
+	if ctx.AuthInfo == "" {
+		return "", false
+	}
+
+	authInfo, ok := kubeconfig.AuthInfos[ctx.AuthInfo]
+	if !ok || authInfo == nil {
+		return "", false
+	}
+
+	if authInfo.Token == "" {
+		return "", false
+	}
+
+	return authInfo.Token, true
+}
+
 // SaveKubeconfig saves a kubeconfig file using the following precedence order:
 //  1. Explicit path parameter (if provided) - highest priority
 //  2. KUBECONFIG environment variable (if set) - handles multiple files

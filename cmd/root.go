@@ -183,13 +183,13 @@ func run(cmd *cobra.Command, args []string) {
 				zapLogger.Info("Successfully updated kubeconfig token for cluster: " + v.Name)
 			}
 		} else {
-			// Legacy approach: extract token and update only if user exists
-			var token string
-			for _, authInfo := range clusterKubeconfig.AuthInfos {
-				if authInfo.Token != "" {
-					token = authInfo.Token
-					break
-				}
+			// Legacy approach: deterministically extract token from CurrentContext chain
+			token, ok := kubeconfig.ExtractTokenFromKubeconfig(clusterKubeconfig)
+			if !ok {
+				zapLogger.Error("Failed to extract token from kubeconfig",
+					zap.String("cluster", v.Name),
+					zap.String("reason", "empty or invalid CurrentContext/AuthInfo chain"))
+				continue
 			}
 			err = kubeconfig.UpdateTokenByName(kubecfg, v.ID, v.Name, token, rancherURL, autoCreate, zapLogger)
 			if err != nil {
