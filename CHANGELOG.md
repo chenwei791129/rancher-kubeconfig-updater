@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.9.0...v1.10.0) (2026-01-31)
+
+
+### Features
+
+* standardize log format to pipe-delimited key=value style ([#75](https://github.com/chenwei791129/rancher-kubeconfig-updater/issues/75)) ([076398d](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/076398d1d1d506b3b495c507c6511f388d51f0a7))
+
 ## [1.9.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.8.0...v1.9.0) (2026-01-31)
 
 
