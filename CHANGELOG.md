@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.10.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.9.0...v1.10.0) (2026-01-31)
+
+
+### Features
+
+* standardize log format to pipe-delimited key=value style ([#75](https://github.com/chenwei791129/rancher-kubeconfig-updater/issues/75)) ([076398d](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/076398d1d1d506b3b495c507c6511f388d51f0a7))
+
+
+### Bug Fixes
+
+* correct Float64/Float32 encoding in PipeEncoder ([#77](https://github.com/chenwei791129/rancher-kubeconfig-updater/issues/77)) ([e247c14](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/e247c14e2544729a650121e88cc0493735d52c29))
+
 ## [1.9.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.8.0...v1.9.0) (2026-01-31)
 
 
