@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.10.0...v1.11.0) (2026-01-31)
+
+
+### Features
+
+* add --with-directly flag for Downstream Directly support ([#79](https://github.com/chenwei791129/rancher-kubeconfig-updater/issues/79)) ([90469ef](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/90469ef40d672844c1d7a13bf5151232bed9ce2a))
+
 ## [1.10.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.9.0...v1.10.0) (2026-01-31)
 
 
