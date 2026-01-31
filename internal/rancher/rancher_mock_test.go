@@ -1,8 +1,10 @@
 package rancher
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -163,16 +165,16 @@ func (s *MockRancherServer) handleRequest(w http.ResponseWriter, r *http.Request
 
 	// Route to appropriate handler based on path and action
 	switch {
-	// Authentication endpoints
-	case strings.Contains(path, "/v3-public/localProviders/local") && action == "login":
+	// Authentication endpoints (POST only, matching production behavior)
+	case strings.Contains(path, "/v3-public/localProviders/local") && action == "login" && r.Method == "POST":
 		s.handleLocalLogin(w, r)
-	case strings.Contains(path, "/v3-public/openLdapProviders/openldap") && action == "login":
+	case strings.Contains(path, "/v3-public/openLdapProviders/openldap") && action == "login" && r.Method == "POST":
 		s.handleLDAPLogin(w, r)
 
 	// Cluster endpoints
 	case path == "/v3/clusters" && r.Method == "GET":
 		s.handleListClusters(w, r)
-	case strings.HasPrefix(path, "/v3/clusters/") && action == "generateKubeconfig":
+	case strings.HasPrefix(path, "/v3/clusters/") && action == "generateKubeconfig" && r.Method == "POST":
 		s.handleGenerateKubeconfig(w, r)
 
 	// Token endpoints
@@ -197,6 +199,18 @@ func (s *MockRancherServer) handleLDAPLogin(w http.ResponseWriter, r *http.Reque
 
 // handleLogin is the common login handler
 func (s *MockRancherServer) handleLogin(w http.ResponseWriter, r *http.Request, authType AuthType) {
+	// Read and preserve the request body for recording
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		s.recordCall(r.Method, r.URL.Path, r.URL.RawQuery, r.Header, "", http.StatusBadRequest)
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+	bodyStr := string(bodyBytes)
+
+	// Restore the body for decoding
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
 	var req struct {
 		Username     string `json:"username"`
 		Password     string `json:"password"`
@@ -204,7 +218,7 @@ func (s *MockRancherServer) handleLogin(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		s.recordCall(r.Method, r.URL.Path, r.URL.RawQuery, r.Header, "", http.StatusBadRequest)
+		s.recordCall(r.Method, r.URL.Path, r.URL.RawQuery, r.Header, bodyStr, http.StatusBadRequest)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -212,7 +226,7 @@ func (s *MockRancherServer) handleLogin(w http.ResponseWriter, r *http.Request, 
 	// Verify user credentials
 	user, exists := s.users[req.Username]
 	if !exists || user.Password != req.Password || user.AuthType != authType {
-		s.recordCall(r.Method, r.URL.Path, r.URL.RawQuery, r.Header, req.Username, http.StatusUnauthorized)
+		s.recordCall(r.Method, r.URL.Path, r.URL.RawQuery, r.Header, bodyStr, http.StatusUnauthorized)
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"error": "invalid credentials"}`))
 		return
@@ -223,7 +237,7 @@ func (s *MockRancherServer) handleLogin(w http.ResponseWriter, r *http.Request, 
 	response := map[string]string{"token": token}
 	respBytes, _ := json.Marshal(response)
 
-	s.recordCall(r.Method, r.URL.Path, r.URL.RawQuery, r.Header, req.Username, http.StatusCreated)
+	s.recordCall(r.Method, r.URL.Path, r.URL.RawQuery, r.Header, bodyStr, http.StatusCreated)
 	w.WriteHeader(http.StatusCreated)
 	_, _ = w.Write(respBytes)
 }
