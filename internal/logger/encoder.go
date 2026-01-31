@@ -3,6 +3,7 @@ package logger
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -109,10 +110,10 @@ func (e *PipeEncoder) addField(field zapcore.Field) {
 		e.fields = append(e.fields, fmt.Sprintf("%s=%d", field.Key, field.Integer))
 
 	case zapcore.Float64Type:
-		e.fields = append(e.fields, fmt.Sprintf("%s=%.2f", field.Key, float64(field.Integer)))
+		e.fields = append(e.fields, fmt.Sprintf("%s=%.2f", field.Key, math.Float64frombits(uint64(field.Integer))))
 
 	case zapcore.Float32Type:
-		e.fields = append(e.fields, fmt.Sprintf("%s=%.2f", field.Key, float64(field.Integer)))
+		e.fields = append(e.fields, fmt.Sprintf("%s=%.2f", field.Key, math.Float32frombits(uint32(field.Integer))))
 
 	case zapcore.BoolType:
 		val := "false"
