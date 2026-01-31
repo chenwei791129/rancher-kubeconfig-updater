@@ -95,8 +95,10 @@ func TestPipeEncoder_Float64Field(t *testing.T) {
 	logger.Info("Test message", zap.Float64("daysUntilExpiration", 15.5))
 
 	output := buf.String()
-	// Float should be formatted without quotes
-	assert.Contains(t, output, "daysUntilExpiration=")
+	// Float should be formatted without quotes and show correct value
+	assert.Contains(t, output, "daysUntilExpiration=15.50")
+	// Verify it does NOT contain the bug value (raw integer representation)
+	assert.NotContains(t, output, "4644421991715836928")
 }
 
 func TestPipeEncoder_MixedFields(t *testing.T) {
