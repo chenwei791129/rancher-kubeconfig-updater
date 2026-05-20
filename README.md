@@ -31,21 +31,28 @@ Other platforms must build from source — see [Building from Source](#building-
 
 **Environment variable overrides:**
 
-| Variable      | Default          | Description                                                              |
-| ------------- | ---------------- | ------------------------------------------------------------------------ |
-| `VERSION`     | `latest`         | Release tag to install (e.g., `v1.4.0`).                                 |
-| `INSTALL_DIR` | `/usr/local/bin` | Target directory. Non-default values must already exist and be writable. |
+| Variable      | Default             | Description                                                                                                                |
+| ------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `VERSION`     | `latest`            | Release tag to install (e.g., `v1.4.0`).                                                                                   |
+| `INSTALL_DIR` | `$HOME/.local/bin`  | Target directory. The default is auto-created if missing. A non-default value must already exist (missing → error); if it exists but is not writable, `sudo mv` is invoked with a notice. |
 
-Install a specific version into a user-writable directory (no `sudo` required):
+Install a specific version:
 
 ```bash
-mkdir -p "$HOME/.local/bin"
 curl -fsSL https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/main/install.sh \
-  | VERSION=v1.4.0 INSTALL_DIR=$HOME/.local/bin sh
+  | VERSION=v1.4.0 sh
 ```
 
 > [!NOTE]
-> Writing to the default `/usr/local/bin` requires elevation. Because `curl ... | sh` connects the script's stdin to the pipe rather than your terminal, a `sudo` password prompt may not work. If you do not have passwordless `sudo` for this command, set `INSTALL_DIR` to a user-writable directory (as shown above) or download the script first and run it directly: `curl -fsSL .../install.sh -o install.sh && sh install.sh`.
+> If `$HOME/.local/bin` is not already on your `PATH`, add it to your shell profile (the installer prints a warning when this is the case). On most Linux distributions (Fedora, Ubuntu 20.04+, Debian 12+, Arch) `~/.local/bin` is added automatically by `~/.profile` or `pam_env` once it exists; on macOS you typically need to add it manually.
+
+> [!TIP]
+> **System-wide install.** To place the binary at `/usr/local/bin` instead, set `INSTALL_DIR=/usr/local/bin` explicitly. Because that directory is owned by `root`, the installer will invoke `sudo mv` after downloading. A `sudo` password prompt does not work reliably under `curl ... | sh` (stdin is the pipe), so for a system-wide install either configure passwordless `sudo` for `mv` or download the script first and run it interactively:
+>
+> ```bash
+> curl -fsSL https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/main/install.sh -o install.sh
+> INSTALL_DIR=/usr/local/bin sh install.sh
+> ```
 
 ### Windows
 

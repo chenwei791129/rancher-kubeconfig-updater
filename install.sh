@@ -6,7 +6,7 @@
 #
 # Environment variables:
 #   VERSION       Release tag (default: latest)
-#   INSTALL_DIR   Target directory (default: /usr/local/bin)
+#   INSTALL_DIR   Target directory (default: $HOME/.local/bin)
 #
 # Supported platforms: linux-amd64, darwin-arm64.
 # Other platforms must build from source — see the README.
@@ -20,14 +20,6 @@ set -eu
 REPO="chenwei791129/rancher-kubeconfig-updater"
 BINARY_NAME="rancher-kubeconfig-updater"
 BUILD_FROM_SOURCE_URL="https://github.com/${REPO}#building-from-source"
-DEFAULT_INSTALL_DIR="/usr/local/bin"
-
-VERSION="${VERSION:-latest}"
-INSTALL_DIR="${INSTALL_DIR:-${DEFAULT_INSTALL_DIR}}"
-INSTALL_DIR="${INSTALL_DIR%/}"
-if [ -z "${INSTALL_DIR}" ]; then
-    INSTALL_DIR="/"
-fi
 
 if [ -t 2 ] && [ -z "${NO_COLOR:-}" ]; then
     C_RED=$(printf '\033[31m')
@@ -92,13 +84,47 @@ if ! command -v curl > /dev/null 2>&1; then
     exit 1
 fi
 
-if [ "${INSTALL_DIR}" != "${DEFAULT_INSTALL_DIR}" ]; then
-    if [ ! -d "${INSTALL_DIR}" ]; then
-        err "INSTALL_DIR=${INSTALL_DIR} does not exist or is not a directory"
+VERSION="${VERSION:-latest}"
+
+# Resolve INSTALL_DIR and the canonical default. DEFAULT_INSTALL_DIR is only
+# meaningful when HOME is set; in the unusual case where the user provides
+# INSTALL_DIR with HOME unset, leave DEFAULT_INSTALL_DIR empty so the
+# equality check below cannot accidentally match a real path.
+if [ -z "${INSTALL_DIR:-}" ]; then
+    if [ -z "${HOME:-}" ]; then
+        err "HOME environment variable is unset or empty; set HOME or pass an explicit INSTALL_DIR."
+        exit 1
+    fi
+    HOME="${HOME%/}"
+    DEFAULT_INSTALL_DIR="${HOME}/.local/bin"
+    INSTALL_DIR="${DEFAULT_INSTALL_DIR}"
+elif [ -n "${HOME:-}" ]; then
+    DEFAULT_INSTALL_DIR="${HOME%/}/.local/bin"
+else
+    DEFAULT_INSTALL_DIR=""
+fi
+INSTALL_DIR="${INSTALL_DIR%/}"
+if [ -z "${INSTALL_DIR}" ]; then
+    INSTALL_DIR="/"
+fi
+
+# Validate INSTALL_DIR against the requirement contract:
+#   - Default value: auto-create with mkdir -p if missing; never escalate.
+#   - Non-default value: caller is responsible for the path. Fail-fast if it
+#     does not exist; if it exists but is not writable, we will use sudo at
+#     install time.
+if [ "${INSTALL_DIR}" = "${DEFAULT_INSTALL_DIR}" ]; then
+    if ! mkdir -p "${INSTALL_DIR}" 2>/dev/null; then
+        err "failed to create default install directory ${INSTALL_DIR}"
         exit 1
     fi
     if [ ! -w "${INSTALL_DIR}" ]; then
-        err "INSTALL_DIR=${INSTALL_DIR} is not writable; rerun with a writable directory or move the binary manually."
+        err "default install directory ${INSTALL_DIR} is not writable"
+        exit 1
+    fi
+else
+    if [ ! -d "${INSTALL_DIR}" ]; then
+        err "INSTALL_DIR=${INSTALL_DIR} does not exist or is not a directory"
         exit 1
     fi
 fi
@@ -139,13 +165,13 @@ chmod +x "${tmpfile}"
 
 target="${INSTALL_DIR}/${BINARY_NAME}"
 
-# At this point any non-default INSTALL_DIR has already been validated as
-# writable above, so this branch only ever fires for the default path.
-if [ ! -w "${INSTALL_DIR}" ]; then
+# Default path was validated as writable above. Only non-default unwritable
+# paths reach the sudo branch.
+if [ "${INSTALL_DIR}" = "${DEFAULT_INSTALL_DIR}" ] || [ -w "${INSTALL_DIR}" ]; then
+    mv "${tmpfile}" "${target}"
+else
     warn "Elevation required to write to ${INSTALL_DIR}; using sudo."
     sudo mv "${tmpfile}" "${target}"
-else
-    mv "${tmpfile}" "${target}"
 fi
 
 info "Installed ${BINARY_NAME} (${display_version}) to ${target}"
