@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.12.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.11.0...v1.12.0) (2026-05-20)
+
+
+### Features
+
+* add install.sh for one-line Linux/macOS installation ([#84](https://github.com/chenwei791129/rancher-kubeconfig-updater/issues/84)) ([69b062c](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/69b062c80f78d6b3ee20a3f7c539cedcbf2dab27))
+* bring install.ps1 Windows installer to main ([#86](https://github.com/chenwei791129/rancher-kubeconfig-updater/issues/86)) ([16f2544](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/16f2544b494e45cc5863fde0421efda62a647367))
+
+
+### Bug Fixes
+
+* embed Windows application manifest to suppress UAC Installer Detection ([#87](https://github.com/chenwei791129/rancher-kubeconfig-updater/issues/87)) ([21df887](https://github.com/chenwei791129/rancher-kubeconfig-updater/commit/21df887d18d2dec0a13ad5ae53c2c5d745d9638c))
+
 ## [1.11.0](https://github.com/chenwei791129/rancher-kubeconfig-updater/compare/v1.10.0...v1.11.0) (2026-01-31)
 
 
