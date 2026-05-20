@@ -9,3 +9,5 @@ rancher-kubeconfig-updater
 # GitHub instructions
 !.github/instructions/
 
+.spectra/
+openspec/.vector-search.db*
