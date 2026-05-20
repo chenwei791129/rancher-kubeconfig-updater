@@ -26,33 +26,10 @@ A command-line tool to update kubeconfig tokens for Rancher-managed Kubernetes c
 curl -fsSL https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/main/install.sh | sh
 ```
 
-Supported platforms: `linux-amd64`, `darwin-arm64` (Apple Silicon).
-Other platforms must build from source — see [Building from Source](#building-from-source).
-
-**Environment variable overrides:**
-
-| Variable      | Default             | Description                                                                                                                |
-| ------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `VERSION`     | `latest`            | Release tag to install (e.g., `v1.4.0`).                                                                                   |
-| `INSTALL_DIR` | `$HOME/.local/bin`  | Target directory. The default is auto-created if missing. A non-default value must already exist (missing → error); if it exists but is not writable, `sudo mv` is invoked with a notice. |
-
-Install a specific version:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/main/install.sh \
-  | VERSION=v1.4.0 sh
-```
-
-> [!NOTE]
-> If `$HOME/.local/bin` is not already on your `PATH`, add it to your shell profile (the installer prints a warning when this is the case). On most Linux distributions (Fedora, Ubuntu 20.04+, Debian 12+, Arch) `~/.local/bin` is added automatically by `~/.profile` or `pam_env` once it exists; on macOS you typically need to add it manually.
-
-> [!TIP]
-> **System-wide install.** To place the binary at `/usr/local/bin` instead, set `INSTALL_DIR=/usr/local/bin` explicitly. Because that directory is owned by `root`, the installer will invoke `sudo mv` after downloading. A `sudo` password prompt does not work reliably under `curl ... | sh` (stdin is the pipe), so for a system-wide install either configure passwordless `sudo` for `mv` or download the script first and run it interactively:
->
-> ```bash
-> curl -fsSL https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/main/install.sh -o install.sh
-> INSTALL_DIR=/usr/local/bin sh install.sh
-> ```
+| Variable      | Default             | Description                              |
+| ------------- | ------------------- | ---------------------------------------- |
+| `VERSION`     | `latest`            | Release tag to install (e.g., `v1.4.0`). |
+| `INSTALL_DIR` | `$HOME/.local/bin`  | Target install directory.                |
 
 ### Windows
 
@@ -60,34 +37,10 @@ curl -fsSL https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-up
 irm https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/main/install.ps1 | iex
 ```
 
-Supported platforms: `windows-amd64`.
-Other platforms (e.g. `windows-arm64`) must build from source — see [Building from Source](#building-from-source).
-
-**Environment variable overrides:**
-
-| Variable      | Default                       | Description                                                                                                                                              |
-| ------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `VERSION`     | `latest`                      | Release tag to install (e.g., `v1.4.0`).                                                                                                                 |
-| `INSTALL_DIR` | `$env:USERPROFILE\.local\bin` | Target directory. The default is auto-created if missing and appended to your User-scope `PATH` (restart your shell to pick it up). A non-default value must already exist; if it is not writable, the installer asks you to re-run from an elevated PowerShell. |
-
-Install a specific version:
-
-```powershell
-$env:VERSION = 'v1.4.0'
-irm https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/main/install.ps1 | iex
-```
-
-> [!TIP]
-> **System-wide install on Windows.** To place the binary under `C:\Program Files\`, first start an **elevated PowerShell** session ("Run as administrator"), then create the target directory (the installer does not auto-create non-default paths) and run the install pipeline:
->
-> ```powershell
-> $target = 'C:\Program Files\rancher-kubeconfig-updater'
-> New-Item -ItemType Directory -Force -Path $target | Out-Null
-> $env:INSTALL_DIR = $target
-> irm https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/main/install.ps1 | iex
-> ```
->
-> The installer does not attempt UAC self-elevation; an elevated session is required up front. Non-default install directories are not auto-added to `PATH`.
+| Variable      | Default                       | Description                              |
+| ------------- | ----------------------------- | ---------------------------------------- |
+| `VERSION`     | `latest`                      | Release tag to install (e.g., `v1.4.0`). |
+| `INSTALL_DIR` | `$env:USERPROFILE\.local\bin` | Target install directory.                |
 
 ### Building from Source
 
@@ -100,91 +53,41 @@ go build -o rancher-kubeconfig-updater .         # Linux / macOS
 go build -o rancher-kubeconfig-updater.exe .     # Windows
 ```
 
-Requires Go 1.25 or later (see [`go.mod`](go.mod)). Move the resulting binary into a directory on your `PATH` (e.g., `/usr/local/bin/` on Unix, `$env:USERPROFILE\.local\bin\` on Windows) to invoke it directly.
+Requires Go 1.25 or later (see [`go.mod`](go.mod)).
 
 > [!NOTE]
-> **Windows builds**: run `go generate ./...` before `go build` (or just `make build`) so the application manifest and version info are embedded into the `.exe`. Without this step the binary still works but Windows treats the `updater` filename as an installer and triggers a UAC prompt on launch. Linux and macOS builds do not need this step.
+> **Windows builds**: run `go generate ./...` before `go build` (or just `make build`) so the application manifest and version info are embedded into the `.exe`. Without this step Windows treats the `updater` filename as an installer and triggers a UAC prompt on launch.
 
 ## Configuration
 
-### Recommended: Use Command-Line Password Input (Most Secure)
-
-> [!IMPORTANT]
-> **Security Best Practice**: For better security, avoid storing your password in files or environment variables. Instead, use the `-p` flag to enter your password interactively at runtime.
-
-Configure only the non-sensitive settings in a `.env` file:
-
-```bash
-# Rancher Configuration
-RANCHER_URL=https://rancher.example.com
-RANCHER_USERNAME=your-username
-
-# Auth type, defaults to "local", can be "ldap" or "local"
-RANCHER_AUTH_TYPE=local
-
-# Optional: Skip TLS certificate verification (see Security Considerations below)
-# RANCHER_INSECURE_SKIP_TLS_VERIFY=false
-```
-
-**Steps:**
-1. Create a new file named `.env` in your project directory
-2. Copy the template above into the file
-3. Replace the placeholder values:
-   - `https://rancher.example.com` → Your Rancher server URL
-   - `your-username` → Your Rancher username
-   - `local` → Keep as `local` for Rancher local auth, or change to `ldap` for LDAP authentication
-4. Run the tool with the `-p` flag to enter your password securely:
-   ```bash
-   ./rancher-kubeconfig-updater -p
-   ```
-   The tool will prompt you to enter your password, which won't be displayed on screen or stored anywhere.
-
-### Alternative: Store Password (Less Secure)
-
-> [!WARNING]
-> **Security Risk**: Storing passwords in `.env` files or environment variables can lead to accidental exposure through version control, logs, or process listings. Only use this method in secure, isolated environments.
-
-If you need to store the password (e.g., for automation in secure CI/CD pipelines), you can add it to your configuration:
-
-**Option 1: Using a `.env` File**
-
-Add the password to your `.env` file:
-
-```bash
-# Rancher Configuration
-RANCHER_URL=https://rancher.example.com
-RANCHER_USERNAME=your-username
-RANCHER_PASSWORD=your-password  # ⚠️ Security risk
-
-# Auth type, defaults to "local", can be "ldap" or "local"
-RANCHER_AUTH_TYPE=local
-```
-
-> [!CAUTION]
-> If you store passwords in `.env`, ensure the file is:
-> - Added to `.gitignore` to prevent committing to version control
-> - Protected with appropriate file permissions (e.g., `chmod 600 .env`)
-> - Never shared or exposed in logs
-
-**Option 2: Environment Variables**
-
-Set environment variables in your shell:
+Configure non-sensitive settings via environment variables in your shell:
 
 ```bash
 export RANCHER_URL=https://rancher.example.com
 export RANCHER_USERNAME=your-username
-export RANCHER_PASSWORD=your-password  # ⚠️ Security risk
-export RANCHER_AUTH_TYPE=local  # Optional: "local" or "ldap" (default: local)
+export RANCHER_AUTH_TYPE=local  # "local" (default) or "ldap"
 ```
 
-### Authentication Types
+Then run the tool with `-p` to enter your password interactively:
 
-The tool supports two authentication methods:
+```bash
+rancher-kubeconfig-updater -p
+```
 
-- **local** (default) - Use Rancher local authentication
-- **ldap** - Use LDAP authentication
+### Supported Environment Variables
 
-You can specify the authentication type in the `.env` file or via command line flag (see [Flags](#flags) section).
+| Variable                           | Description                                              |
+| ---------------------------------- | -------------------------------------------------------- |
+| `RANCHER_URL`                      | Rancher server URL.                                      |
+| `RANCHER_USERNAME`                 | Rancher username.                                        |
+| `RANCHER_PASSWORD`                 | Rancher password. Prefer `-p` for interactive input.     |
+| `RANCHER_AUTH_TYPE`                | `local` (default) or `ldap`.                             |
+| `RANCHER_INSECURE_SKIP_TLS_VERIFY` | Skip TLS verification. See [TLS Certificate Verification](#tls-certificate-verification). |
+| `TOKEN_THRESHOLD_DAYS`             | Token expiration threshold in days (default: `30`).      |
+| `FORCE_REFRESH`                    | Force regeneration regardless of expiration.             |
+| `DRY_RUN`                          | Preview changes without modifying kubeconfig.            |
+
+Command-line flags take precedence over environment variables.
 
 ## Usage
 
@@ -225,7 +128,7 @@ Use a custom kubeconfig file:
 
 ### Alternative: Using Stored Credentials
 
-If you have configured `RANCHER_PASSWORD` in your `.env` file or environment variables:
+If you have configured `RANCHER_PASSWORD` as an environment variable:
 
 Update tokens for existing clusters:
 
@@ -275,7 +178,7 @@ Flags:
   > [!TIP]
   > Using `-p` ensures your password is never stored in files, environment variables, or shell history.
 
-- **`-u, --user`**: Override the username from environment variables or `.env` file
+- **`-u, --user`**: Override the username from environment variables
   ```bash
   ./rancher-kubeconfig-updater -u admin -p
   ```
@@ -406,9 +309,6 @@ The tool includes smart token expiration checking to avoid unnecessary token reg
 # Via environment variable
 export TOKEN_THRESHOLD_DAYS=30
 ./rancher-kubeconfig-updater -p
-
-# Via .env file
-TOKEN_THRESHOLD_DAYS=30
 ```
 
 **Force regeneration (bypass checks):**
@@ -476,12 +376,6 @@ By default, the tool verifies TLS certificates when connecting to the Rancher AP
 ```bash
 export RANCHER_INSECURE_SKIP_TLS_VERIFY=true
 ./rancher-kubeconfig-updater -p
-```
-
-**Option 3: `.env` File**
-```bash
-# Add to your .env file
-RANCHER_INSECURE_SKIP_TLS_VERIFY=true
 ```
 
 ### Security Warning
