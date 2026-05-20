@@ -1,5 +1,7 @@
 package main
 
+//go:generate go tool goversioninfo -platform-specific versioninfo.json
+
 import (
 	"os"
 	"rancher-kubeconfig-updater/cmd"
