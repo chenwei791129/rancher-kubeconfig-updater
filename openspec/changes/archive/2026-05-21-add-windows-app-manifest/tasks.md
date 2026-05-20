@@ -16,6 +16,6 @@
 
 ## 4. 端到端驗證
 
-- [ ] 4.1 在 `windows-amd64` 主機驗證 Launching the binary from a standard user shell does not prompt for UAC scenario：以非 admin PS session 跑 `.\rancher-kubeconfig-updater.exe --help`，斷言 (a) 無 UAC prompt；(b) 輸出 usage 文字於當前 console（不另開視窗）；(c) 退出碼 0。Verified by 手動執行並截錄輸出。
-- [ ] 4.2 在同一主機驗證 Released binary shows the release tag in File Properties scenario：對由 CI 產出的對應 release tag binary，於 Windows Explorer 右鍵 → 內容 → 詳細資料，比對 ProductVersion / FileVersion / ProductName / FileDescription 欄位值符合 spec 的 release tag mapping。Verified by 截圖或 PowerShell `(Get-Item .\rancher-kubeconfig-updater.exe).VersionInfo | Format-List` 輸出。
-- [ ] 4.3 驗證 Linux and macOS artefacts are unaffected scenario：在乾淨 worktree 上抓取 pre-change main 與 post-change main 的 `goos=linux goarch=amd64` build 產出 binary，以 `sha256sum` 比對應該 byte-identical（兩個 commit 的其他差異僅來自 versioninfo.json / main.go go:generate directive / .gitignore / Makefile / workflow，皆不影響 Linux build output）。Verified by 手動比對 hash。
+- [x] 4.1 在 `windows-amd64` 主機驗證 Launching the binary from a standard user shell does not prompt for UAC scenario：以非 admin PS session 跑 `.\rancher-kubeconfig-updater.exe --help`，斷言 (a) 無 UAC prompt；(b) 輸出 usage 文字於當前 console（不另開視窗）；(c) 退出碼 0。Verified by 手動執行並截錄輸出。
+- [x] 4.2 在同一主機驗證 Released binary shows the release tag in File Properties scenario：對由 CI 產出的對應 release tag binary，於 Windows Explorer 右鍵 → 內容 → 詳細資料，比對 ProductVersion / FileVersion / ProductName / FileDescription 欄位值符合 spec 的 release tag mapping。Verified by 截圖或 PowerShell `(Get-Item .\rancher-kubeconfig-updater.exe).VersionInfo | Format-List` 輸出。
+- [x] 4.3 驗證 Linux and macOS artefacts are unaffected scenario：在乾淨 worktree 上抓取 pre-change main 與 post-change main 的 `goos=linux goarch=amd64` build 產出 binary，以 `sha256sum` 比對應該 byte-identical（兩個 commit 的其他差異僅來自 versioninfo.json / main.go go:generate directive / .gitignore / Makefile / workflow，皆不影響 Linux build output）。Verified by 手動比對 hash。
