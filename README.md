@@ -23,28 +23,29 @@ A command-line tool to update kubeconfig tokens for Rancher-managed Kubernetes c
 ### Linux / macOS
 
 ```bash
-# Detect OS and architecture
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-ARCH=$(uname -m)
-
-# Map architecture names
-case $ARCH in
-    x86_64) ARCH="amd64" ;;
-    aarch64) ARCH="arm64" ;;
-esac
-
-# Download the latest release
-curl -LO "https://github.com/chenwei791129/rancher-kubeconfig-updater/releases/latest/download/rancher-kubeconfig-updater-${OS}-${ARCH}"
-
-# Rename to simpler name
-mv "rancher-kubeconfig-updater-${OS}-${ARCH}" rancher-kubeconfig-updater
-
-# Make it executable
-chmod +x rancher-kubeconfig-updater
-
-# Move to PATH (optional)
-sudo mv rancher-kubeconfig-updater /usr/local/bin/
+curl -fsSL https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/main/install.sh | sh
 ```
+
+Supported platforms: `linux-amd64`, `darwin-arm64` (Apple Silicon).
+Other platforms must build from source — see [Building from Source](#building-from-source).
+
+**Environment variable overrides:**
+
+| Variable      | Default          | Description                                                              |
+| ------------- | ---------------- | ------------------------------------------------------------------------ |
+| `VERSION`     | `latest`         | Release tag to install (e.g., `v1.4.0`).                                 |
+| `INSTALL_DIR` | `/usr/local/bin` | Target directory. Non-default values must already exist and be writable. |
+
+Install a specific version into a user-writable directory (no `sudo` required):
+
+```bash
+mkdir -p "$HOME/.local/bin"
+curl -fsSL https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/main/install.sh \
+  | VERSION=v1.4.0 INSTALL_DIR=$HOME/.local/bin sh
+```
+
+> [!NOTE]
+> Writing to the default `/usr/local/bin` requires elevation. Because `curl ... | sh` connects the script's stdin to the pipe rather than your terminal, a `sudo` password prompt may not work. If you do not have passwordless `sudo` for this command, set `INSTALL_DIR` to a user-writable directory (as shown above) or download the script first and run it directly: `curl -fsSL .../install.sh -o install.sh && sh install.sh`.
 
 ### Windows
 
@@ -58,6 +59,18 @@ ren rancher-kubeconfig-updater-windows-amd64.exe rancher-kubeconfig-updater.exe
 # Move to a directory in your PATH (optional)
 move rancher-kubeconfig-updater.exe C:\Windows\System32\
 ```
+
+### Building from Source
+
+For platforms outside the prebuilt release matrix (e.g., `linux-arm64`, `darwin-amd64`), build the binary locally:
+
+```bash
+git clone https://github.com/chenwei791129/rancher-kubeconfig-updater.git
+cd rancher-kubeconfig-updater
+go build -o rancher-kubeconfig-updater .
+```
+
+Requires Go 1.25 or later (see [`go.mod`](go.mod)). Move the resulting binary into a directory on your `PATH` (e.g., `/usr/local/bin/`) to invoke it directly.
 
 ## Configuration
 
