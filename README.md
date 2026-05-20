@@ -23,28 +23,36 @@ A command-line tool to update kubeconfig tokens for Rancher-managed Kubernetes c
 ### Linux / macOS
 
 ```bash
-# Detect OS and architecture
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-ARCH=$(uname -m)
-
-# Map architecture names
-case $ARCH in
-    x86_64) ARCH="amd64" ;;
-    aarch64) ARCH="arm64" ;;
-esac
-
-# Download the latest release
-curl -LO "https://github.com/chenwei791129/rancher-kubeconfig-updater/releases/latest/download/rancher-kubeconfig-updater-${OS}-${ARCH}"
-
-# Rename to simpler name
-mv "rancher-kubeconfig-updater-${OS}-${ARCH}" rancher-kubeconfig-updater
-
-# Make it executable
-chmod +x rancher-kubeconfig-updater
-
-# Move to PATH (optional)
-sudo mv rancher-kubeconfig-updater /usr/local/bin/
+curl -fsSL https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/main/install.sh | sh
 ```
+
+Supported platforms: `linux-amd64`, `darwin-arm64` (Apple Silicon).
+Other platforms must build from source — see [Building from Source](#building-from-source).
+
+**Environment variable overrides:**
+
+| Variable      | Default             | Description                                                                                                                |
+| ------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `VERSION`     | `latest`            | Release tag to install (e.g., `v1.4.0`).                                                                                   |
+| `INSTALL_DIR` | `$HOME/.local/bin`  | Target directory. The default is auto-created if missing. A non-default value must already exist (missing → error); if it exists but is not writable, `sudo mv` is invoked with a notice. |
+
+Install a specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/main/install.sh \
+  | VERSION=v1.4.0 sh
+```
+
+> [!NOTE]
+> If `$HOME/.local/bin` is not already on your `PATH`, add it to your shell profile (the installer prints a warning when this is the case). On most Linux distributions (Fedora, Ubuntu 20.04+, Debian 12+, Arch) `~/.local/bin` is added automatically by `~/.profile` or `pam_env` once it exists; on macOS you typically need to add it manually.
+
+> [!TIP]
+> **System-wide install.** To place the binary at `/usr/local/bin` instead, set `INSTALL_DIR=/usr/local/bin` explicitly. Because that directory is owned by `root`, the installer will invoke `sudo mv` after downloading. A `sudo` password prompt does not work reliably under `curl ... | sh` (stdin is the pipe), so for a system-wide install either configure passwordless `sudo` for `mv` or download the script first and run it interactively:
+>
+> ```bash
+> curl -fsSL https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/main/install.sh -o install.sh
+> INSTALL_DIR=/usr/local/bin sh install.sh
+> ```
 
 ### Windows
 
@@ -58,6 +66,18 @@ ren rancher-kubeconfig-updater-windows-amd64.exe rancher-kubeconfig-updater.exe
 # Move to a directory in your PATH (optional)
 move rancher-kubeconfig-updater.exe C:\Windows\System32\
 ```
+
+### Building from Source
+
+For platforms outside the prebuilt release matrix (e.g., `linux-arm64`, `darwin-amd64`), build the binary locally:
+
+```bash
+git clone https://github.com/chenwei791129/rancher-kubeconfig-updater.git
+cd rancher-kubeconfig-updater
+go build -o rancher-kubeconfig-updater .
+```
+
+Requires Go 1.25 or later (see [`go.mod`](go.mod)). Move the resulting binary into a directory on your `PATH` (e.g., `/usr/local/bin/`) to invoke it directly.
 
 ## Configuration
 
