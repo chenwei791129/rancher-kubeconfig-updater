@@ -2,7 +2,18 @@
 
 ## Purpose
 
-TBD - created by archiving change 'add-install-script'. Update Purpose after archive.
+Defines the install script contract for `rancher-kubeconfig-updater`. The repository
+ships two scripts at its root that share the same `VERSION` / `INSTALL_DIR`
+environment variable model, the same fail-fast platform allowlist, and the same
+staging-download pattern:
+
+- `install.sh` — POSIX `sh` for Linux and macOS, invoked via `curl ... | sh`.
+- `install.ps1` — PowerShell 5.1+ for Windows, invoked via `irm ... | iex`.
+
+The requirements below cover the one-line invocation, supported platforms,
+version selection, install-directory handling (per-platform default + opt-in
+non-default paths with platform-specific elevation rules), and the README
+content that documents all of the above.
 
 ## Requirements
 
