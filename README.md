@@ -57,27 +57,50 @@ curl -fsSL https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-up
 ### Windows
 
 ```powershell
-# Download the latest release
-curl.exe -LO https://github.com/chenwei791129/rancher-kubeconfig-updater/releases/latest/download/rancher-kubeconfig-updater-windows-amd64.exe
-
-# Rename to simpler name
-ren rancher-kubeconfig-updater-windows-amd64.exe rancher-kubeconfig-updater.exe
-
-# Move to a directory in your PATH (optional)
-move rancher-kubeconfig-updater.exe C:\Windows\System32\
+irm https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/main/install.ps1 | iex
 ```
+
+Supported platforms: `windows-amd64`.
+Other platforms (e.g. `windows-arm64`) must build from source — see [Building from Source](#building-from-source).
+
+**Environment variable overrides:**
+
+| Variable      | Default                       | Description                                                                                                                                              |
+| ------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VERSION`     | `latest`                      | Release tag to install (e.g., `v1.4.0`).                                                                                                                 |
+| `INSTALL_DIR` | `$env:USERPROFILE\.local\bin` | Target directory. The default is auto-created if missing and appended to your User-scope `PATH` (restart your shell to pick it up). A non-default value must already exist; if it is not writable, the installer asks you to re-run from an elevated PowerShell. |
+
+Install a specific version:
+
+```powershell
+$env:VERSION = 'v1.4.0'
+irm https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/main/install.ps1 | iex
+```
+
+> [!TIP]
+> **System-wide install on Windows.** To place the binary under `C:\Program Files\`, first start an **elevated PowerShell** session ("Run as administrator"), then create the target directory (the installer does not auto-create non-default paths) and run the install pipeline:
+>
+> ```powershell
+> $target = 'C:\Program Files\rancher-kubeconfig-updater'
+> New-Item -ItemType Directory -Force -Path $target | Out-Null
+> $env:INSTALL_DIR = $target
+> irm https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/main/install.ps1 | iex
+> ```
+>
+> The installer does not attempt UAC self-elevation; an elevated session is required up front. Non-default install directories are not auto-added to `PATH`.
 
 ### Building from Source
 
-For platforms outside the prebuilt release matrix (e.g., `linux-arm64`, `darwin-amd64`), build the binary locally:
+For platforms outside the prebuilt release matrix (e.g., `linux-arm64`, `darwin-amd64`, `windows-arm64`), build the binary locally:
 
-```bash
+```sh
 git clone https://github.com/chenwei791129/rancher-kubeconfig-updater.git
 cd rancher-kubeconfig-updater
-go build -o rancher-kubeconfig-updater .
+go build -o rancher-kubeconfig-updater .         # Linux / macOS
+go build -o rancher-kubeconfig-updater.exe .     # Windows
 ```
 
-Requires Go 1.25 or later (see [`go.mod`](go.mod)). Move the resulting binary into a directory on your `PATH` (e.g., `/usr/local/bin/`) to invoke it directly.
+Requires Go 1.25 or later (see [`go.mod`](go.mod)). Move the resulting binary into a directory on your `PATH` (e.g., `/usr/local/bin/` on Unix, `$env:USERPROFILE\.local\bin\` on Windows) to invoke it directly.
 
 ## Configuration
 
