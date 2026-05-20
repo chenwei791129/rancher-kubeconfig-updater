@@ -6,6 +6,9 @@
 # Build output
 rancher-kubeconfig-updater
 
+# Generated Windows PE resource artefacts (produced by `go generate` / goversioninfo)
+*.syso
+
 # GitHub instructions
 !.github/instructions/
 

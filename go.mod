@@ -27,6 +27,7 @@ require (
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/Masterminds/semver/v3 v3.3.0 // indirect
 	github.com/OpenPeeDeeP/depguard/v2 v2.2.1 // indirect
+	github.com/akavel/rsrc v0.10.2 // indirect
 	github.com/alecthomas/go-check-sumtype v0.3.1 // indirect
 	github.com/alessio/shellescape v1.4.1 // indirect
 	github.com/alexkohler/nakedret/v2 v2.0.5 // indirect
@@ -112,6 +113,7 @@ require (
 	github.com/jgautheron/goconst v1.7.1 // indirect
 	github.com/jingyugao/rowserrcheck v1.1.1 // indirect
 	github.com/jjti/go-spancheck v0.6.4 // indirect
+	github.com/josephspurrier/goversioninfo v1.7.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/julz/importas v0.2.0 // indirect
 	github.com/kaptinlin/go-i18n v0.1.7 // indirect
@@ -253,4 +255,5 @@ require (
 tool (
 	github.com/evilmartians/lefthook
 	github.com/golangci/golangci-lint/cmd/golangci-lint
+	github.com/josephspurrier/goversioninfo/cmd/goversioninfo
 )

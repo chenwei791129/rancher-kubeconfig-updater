@@ -102,6 +102,9 @@ go build -o rancher-kubeconfig-updater.exe .     # Windows
 
 Requires Go 1.25 or later (see [`go.mod`](go.mod)). Move the resulting binary into a directory on your `PATH` (e.g., `/usr/local/bin/` on Unix, `$env:USERPROFILE\.local\bin\` on Windows) to invoke it directly.
 
+> [!NOTE]
+> **Windows builds**: run `go generate ./...` before `go build` (or just `make build`) so the application manifest and version info are embedded into the `.exe`. Without this step the binary still works but Windows treats the `updater` filename as an installer and triggers a UAC prompt on launch. Linux and macOS builds do not need this step.
+
 ## Configuration
 
 ### Recommended: Use Command-Line Password Input (Most Secure)

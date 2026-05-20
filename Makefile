@@ -14,5 +14,6 @@ lint:
 
 .PHONY: build
 build:
+	go generate ./...
 	go build .
 	@echo "✅ Production binary built (without dev tools)"
