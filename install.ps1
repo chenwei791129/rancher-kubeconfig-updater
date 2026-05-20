@@ -207,7 +207,18 @@ if ($Version -eq 'latest') {
         $headResp = Invoke-WebRequest -Uri $Url -Method Head -MaximumRedirection 0 -UseBasicParsing -ErrorAction Stop
         $location = Get-LocationHeader $headResp.Headers
     } catch {
-        $location = Get-LocationHeader $_.Exception.Response.Headers
+        # Some Windows PowerShell hosts surface an exception whose type lacks
+        # a `Response` property (or whose Response lacks `Headers`). Under
+        # `Set-StrictMode -Version 3.0` accessing a missing property is a
+        # terminating error, so wrap the property walk in its own try/catch
+        # and swallow the failure - display_version simply falls back to the
+        # literal "latest" if we can't resolve the redirect.
+        try {
+            $resp = $_.Exception.Response
+            $location = Get-LocationHeader $resp.Headers
+        } catch {
+            $null = $_
+        }
     }
     if ($location -is [array]) {
         $location = $location[0]
