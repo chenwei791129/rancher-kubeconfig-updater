@@ -40,22 +40,6 @@ irm https://raw.githubusercontent.com/chenwei791129/rancher-kubeconfig-updater/m
 | `VERSION`     | `latest`                      | Release tag to install (e.g., `v1.4.0`). |
 | `INSTALL_DIR` | `$env:USERPROFILE\.local\bin` | Target install directory.                |
 
-### Building from Source
-
-For platforms outside the prebuilt release matrix (e.g., `linux-arm64`, `darwin-amd64`, `windows-arm64`), build the binary locally:
-
-```sh
-git clone https://github.com/chenwei791129/rancher-kubeconfig-updater.git
-cd rancher-kubeconfig-updater
-go build -o rancher-kubeconfig-updater .         # Linux / macOS
-go build -o rancher-kubeconfig-updater.exe .     # Windows
-```
-
-Requires Go 1.25 or later (see [`go.mod`](go.mod)).
-
-> [!NOTE]
-> **Windows builds**: run `go generate ./...` before `go build` (or just `make build`) so the application manifest and version info are embedded into the `.exe`. Without this step Windows treats the `updater` filename as an installer and triggers a UAC prompt on launch.
-
 ## Configuration
 
 Configure non-sensitive settings via environment variables in your shell:
