@@ -345,17 +345,17 @@ func (s *MockRancherServer) generateKubeconfigYAML(clusterID, clusterName string
 	var clusters, contexts strings.Builder
 
 	// Primary cluster (Rancher proxy)
-	clusters.WriteString(fmt.Sprintf(`- cluster:
+	_, _ = fmt.Fprintf(&clusters, `- cluster:
     server: %s/k8s/clusters/%s
   name: %s
-`, s.server.URL, clusterID, clusterName))
+`, s.server.URL, clusterID, clusterName)
 
 	// Primary context
-	contexts.WriteString(fmt.Sprintf(`- context:
+	_, _ = fmt.Fprintf(&contexts, `- context:
     cluster: %s
     user: %s
   name: %s
-`, clusterName, clusterName, clusterName))
+`, clusterName, clusterName, clusterName)
 
 	// Check if cluster has Downstream Directly nodes configured
 	if config, exists := s.clusterConfigs[clusterID]; exists && len(config.DirectNodes) > 0 {
@@ -364,24 +364,24 @@ func (s *MockRancherServer) generateKubeconfigYAML(clusterID, clusterName string
 
 			// Direct cluster entry
 			if config.CACert != "" {
-				clusters.WriteString(fmt.Sprintf(`- cluster:
+				_, _ = fmt.Fprintf(&clusters, `- cluster:
     server: https://%s
     certificate-authority-data: %s
   name: %s
-`, node.Server, config.CACert, directClusterName))
+`, node.Server, config.CACert, directClusterName)
 			} else {
-				clusters.WriteString(fmt.Sprintf(`- cluster:
+				_, _ = fmt.Fprintf(&clusters, `- cluster:
     server: https://%s
   name: %s
-`, node.Server, directClusterName))
+`, node.Server, directClusterName)
 			}
 
 			// Direct context entry (uses same user as primary)
-			contexts.WriteString(fmt.Sprintf(`- context:
+			_, _ = fmt.Fprintf(&contexts, `- context:
     cluster: %s
     user: %s
   name: %s
-`, directClusterName, clusterName, directClusterName))
+`, directClusterName, clusterName, directClusterName)
 		}
 	}
 
