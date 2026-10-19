@@ -8,7 +8,7 @@ on:
 jobs:
   test:
     name: Run Go Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     
     steps:
       - name: Checkout code
