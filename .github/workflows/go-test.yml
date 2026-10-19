@@ -5,32 +5,16 @@ on:
     branches-ignore:
       - main
 
+permissions:
+  contents: read
+
 jobs:
+  # Shared workflow: the pinned checkout/setup-go SHAs are maintained in
+  # chenwei791129/.github for every repository. It downloads modules, caches
+  # them through setup-go and always runs with -count=1.
   test:
-    name: Run Go Tests
-    runs-on: ubuntu-26.04
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-      
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: 'go.mod'
-      
-      - name: Cache Go modules
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-      
-      - name: Download dependencies
-        run: go mod download
-      
-      - name: Run tests
-        run: go test -count 1 -v ./...
+    permissions:
+      contents: read
+    uses: chenwei791129/.github/.github/workflows/go-test.yml@main
+    with:
+      test-args: -v ./...
